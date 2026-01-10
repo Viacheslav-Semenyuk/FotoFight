@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "Foto Fight",
-    "slug": "foto-fight",
+    "slug": "fotofight",
+    "owner": "pickleants-organization",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +25,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.fotofight.app",
-      "versionCode": 1,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
