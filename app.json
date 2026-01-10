@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Foto Fight",
+    "slug": "foto-fight",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fotofight.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.fotofight.app",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Foto Fight to access your camera to take photos for challenges."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "mediaLibraryPermission": "Allow Foto Fight to access your photos to submit challenges."
+        }
+      ]
+    ],
+    "scheme": "foto-fight",
+    "extra": {
+      "eas": {
+        "projectId": "cd256da8-2d92-44d6-a7c2-b39ed54426a5"
+      }
+    }
+  }
+}
