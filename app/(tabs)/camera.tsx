@@ -40,11 +40,6 @@ export default function CameraScreen() {
     ? params.preselectedChallengeId[0] 
     : params.preselectedChallengeId;
   
-  // Debug: log params
-  useEffect(() => {
-    console.log('[Camera] All params:', params);
-    console.log('[Camera] preselectedChallengeId:', preselectedChallengeId, typeof preselectedChallengeId);
-  }, [params, preselectedChallengeId]);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoAspectRatio, setPhotoAspectRatio] = useState<number>(1);
   const [photoMirrored, setPhotoMirrored] = useState(false);
@@ -73,36 +68,22 @@ export default function CameraScreen() {
     const loadPreselectedChallenge = async () => {
       // Check if preselectedChallengeId exists and is not empty
       if (preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '') {
-        console.log('[Camera] Loading preselected challenge:', preselectedChallengeId);
         const challengeResponse = await challengeService.getChallenge(preselectedChallengeId);
         if (challengeResponse.success && challengeResponse.data) {
-          console.log('[Camera] Preselected challenge loaded:', challengeResponse.data.title);
-          console.log('[Camera] Setting selectedChallenge to:', challengeResponse.data);
           setSelectedChallenge(challengeResponse.data);
-        } else {
-          console.error('[Camera] Failed to load preselected challenge:', challengeResponse.error);
         }
-      } else {
-        console.log('[Camera] No preselected challenge ID or invalid format:', preselectedChallengeId);
       }
     };
     
     loadPreselectedChallenge();
   }, [preselectedChallengeId]);
   
-  // Debug: log selectedChallenge when it changes
-  useEffect(() => {
-    console.log('[Camera] selectedChallenge changed:', selectedChallenge?.title || 'null');
-  }, [selectedChallenge]);
-  
   // Restore preselected challenge in preview mode if it was lost
   useEffect(() => {
     // If we're in preview mode (capturedPhoto exists) and have preselectedChallengeId but no selectedChallenge
     if (capturedPhoto && preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '' && !selectedChallenge) {
-      console.log('[Camera] Restoring preselected challenge in preview mode:', preselectedChallengeId);
       challengeService.getChallenge(preselectedChallengeId).then((challengeResponse) => {
         if (challengeResponse.success && challengeResponse.data) {
-          console.log('[Camera] Preselected challenge restored in preview:', challengeResponse.data.title);
           setSelectedChallenge(challengeResponse.data);
         }
       });
@@ -137,12 +118,9 @@ export default function CameraScreen() {
   // Control camera activation based on screen focus
   useFocusEffect(
     useCallback(() => {
-      console.log('[Camera] useFocusEffect triggered, preselectedChallengeId:', preselectedChallengeId);
-      
       // Check if we're updating from dropdown selection
       // If so, don't reset state to prevent camera from reopening
       if (isUpdatingFromDropdownRef.current) {
-        console.log('[Camera] Update from dropdown, skipping state reset');
         // Just update the selected challenge if needed
         const hasPreselected = preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '';
         if (hasPreselected) {
@@ -157,7 +135,6 @@ export default function CameraScreen() {
       
       // Always reset state when navigating to camera tab (unless updating from dropdown)
       // This ensures camera view is shown, not preview mode
-      console.log('[Camera] Resetting state for camera tab navigation');
       setCapturedPhoto(null);
       setPhotoAspectRatio(1);
       setPhotoMirrored(false);
@@ -171,14 +148,11 @@ export default function CameraScreen() {
       const hasPreselected = preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '';
       
       if (!hasPreselected) {
-        console.log('[Camera] No preselected challenge, clearing selectedChallenge');
         setSelectedChallenge(null);
       } else {
-        console.log('[Camera] Preselected challenge exists, will load it');
         // Load the preselected challenge immediately
         challengeService.getChallenge(preselectedChallengeId).then((challengeResponse) => {
           if (challengeResponse.success && challengeResponse.data) {
-            console.log('[Camera] Preselected challenge loaded in useFocusEffect:', challengeResponse.data.title);
             setSelectedChallenge(challengeResponse.data);
           }
         });
@@ -422,7 +396,8 @@ export default function CameraScreen() {
             style={[
               styles.preview,
               photoMirrored && styles.previewMirrored,
-            ]} 
+            ]}
+            resizeMode="contain"
           />
           
           {/* Notification overlay */}
@@ -985,7 +960,6 @@ const styles = StyleSheet.create({
   },
   preview: {
     flex: 1,
-    resizeMode: 'contain',
     backgroundColor: '#000',
   },
   previewMirrored: {
@@ -1055,11 +1029,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.15)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 5,
+    }),
     maxHeight: 200,
     overflow: 'hidden',
     zIndex: 1000,

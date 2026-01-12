@@ -24,14 +24,6 @@ export default function RootLayout() {
           }} 
         />
         <Stack.Screen 
-          name="login" 
-          options={{ 
-            title: 'Sign In',
-            headerShown: true,
-            presentation: 'modal',
-          }} 
-        />
-        <Stack.Screen 
           name="auth/callback" 
           options={{ 
             headerShown: false,
@@ -41,13 +33,6 @@ export default function RootLayout() {
           name="(tabs)" 
           options={{ 
             headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="challenge-detail" 
-          options={{ 
-            title: 'Challenge Details',
-            headerShown: true,
           }} 
         />
       </Stack>

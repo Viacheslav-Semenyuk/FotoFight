@@ -1,15 +1,21 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Pressable, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet, Platform } from 'react-native';
 import { useResponsive } from '../../hooks/useResponsive';
 import Sidebar from '../../components/Sidebar';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { isDesktop, isTablet, width } = useResponsive();
   const showSidebar = isDesktop || isTablet;
   const isSmallScreen = width < 380;
+  const { signOut, user: authUser } = useAuth();
+  
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <View style={styles.container}>
@@ -25,12 +31,14 @@ export default function TabsLayout() {
               borderBottomWidth: 0,
               elevation: 0,
               shadowOpacity: 0,
-              height: 48,
+              height: 56 + insets.top,
             },
+            headerStatusBarHeight: insets.top,
             headerShadowVisible: false,
             headerTintColor: '#fff',
             headerTitleStyle: {
               fontWeight: 'bold',
+              fontSize: 18,
             },
             // Hide tab bar on desktop/tablet
             tabBarStyle: showSidebar ? { display: 'none' } : {
@@ -82,6 +90,9 @@ export default function TabsLayout() {
               tabBarIcon: () => (
                 <Ionicons name="camera" size={28} color="#fff" />
               ),
+              tabBarIconStyle: {
+                marginTop: 0,
+              },
               tabBarButton: (props) => (
                 <Pressable
                   {...props}
@@ -93,11 +104,15 @@ export default function TabsLayout() {
                     backgroundColor: '#000',
                     borderWidth: 4,
                     borderColor: '#fff',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 4,
-                    elevation: 5,
+                    ...(Platform.OS === 'web' ? {
+                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
+                    } : {
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 4,
+                      elevation: 5,
+                    }),
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
@@ -123,16 +138,20 @@ export default function TabsLayout() {
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="person" size={size} color={color} />
               ),
-              headerRight: () => (
-                <Pressable
-                  style={{ marginRight: 16, padding: 4 }}
-                  onPress={() => {
-                    // Handle logout
-                  }}
-                >
-                  <Ionicons name="log-out-outline" size={24} color="#fff" />
-                </Pressable>
-              ),
+              headerRight: () => {
+                // Only show logout in mobile header if user is authenticated
+                if (!authUser || showSidebar) {
+                  return null;
+                }
+                return (
+                  <Pressable
+                    style={{ marginRight: 16, padding: 4 }}
+                    onPress={handleLogout}
+                  >
+                    <Ionicons name="log-out-outline" size={24} color="#fff" />
+                  </Pressable>
+                );
+              },
             }}
           />
           <Tabs.Screen
@@ -140,14 +159,6 @@ export default function TabsLayout() {
             options={{
               title: 'User Profile',
               headerTitle: 'Profile',
-              href: null, // Hide from tab bar
-            }}
-          />
-          <Tabs.Screen
-            name="login"
-            options={{
-              title: 'Sign In',
-              headerTitle: 'Sign In',
               href: null, // Hide from tab bar
             }}
           />

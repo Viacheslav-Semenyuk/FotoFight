@@ -217,7 +217,7 @@ export default function ProfileScreen() {
   return (
     <View style={styles.wrapper}>
       <ScrollView
-        style={[styles.container, centerContent && styles.containerDesktop]}
+        style={[styles.container, centerContent && styles.containerDesktop, Platform.OS === 'web' && { pointerEvents: 'auto' }]}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -250,7 +250,8 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
-          {authUser && (
+          {/* Logout button only for desktop/tablet (mobile uses headerRight in tabs layout) */}
+          {authUser && centerContent && (
             <Pressable style={styles.signOutButton} onPress={handleSignOut}>
               <Ionicons name="log-out-outline" size={24} color="#666" />
             </Pressable>

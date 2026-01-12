@@ -113,6 +113,7 @@ export default function FeedImage({ uri, aspectRatio: providedAspectRatio }: Fee
         style={{
           width: useCoverMode ? '100%' : displayWidth,
           height: useCoverMode ? '100%' : displayHeight,
+          pointerEvents: 'auto',
         }}
         resizeMode={useCoverMode ? 'cover' : 'contain'}
       />

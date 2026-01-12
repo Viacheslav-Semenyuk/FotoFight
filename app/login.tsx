@@ -14,6 +14,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../hooks/useResponsive';
 import * as SecureStore from 'expo-secure-store';
 
+// Configure screen options
+export const options = {
+  title: 'Sign In',
+  headerShown: true,
+  presentation: 'modal' as const,
+};
+
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

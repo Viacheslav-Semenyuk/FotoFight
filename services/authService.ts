@@ -239,7 +239,7 @@ export const authService = {
         .from('users')
         .select('id')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!existingUser) {
         // Create user profile
