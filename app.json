@@ -49,7 +49,19 @@
           "mediaLibraryPermission": "Allow Foto Fight to access your photos to submit challenges."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "gradleProperties": {
+              "android.useAndroidX": "true",
+              "android.enableJetifier": "true"
+            }
+          }
+        }
+      ],
+      "expo-secure-store"
     ],
     "scheme": "foto-fight",
     "extra": {
