@@ -32,9 +32,11 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
+      "expo-router",
       [
         "expo-camera",
         {
@@ -46,7 +48,8 @@
         {
           "mediaLibraryPermission": "Allow Foto Fight to access your photos to submit challenges."
         }
-      ]
+      ],
+      "expo-router"
     ],
     "scheme": "foto-fight",
     "extra": {

@@ -8,7 +8,7 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerStyle: {
-            backgroundColor: '#FF6B6B',
+            backgroundColor: '#000',
           },
           headerTintColor: '#fff',
           headerTitleStyle: {
@@ -17,23 +17,15 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen 
-          name="index" 
+          name="(tabs)" 
           options={{ 
-            title: 'Foto Fight',
-            headerShown: true,
+            headerShown: false,
           }} 
         />
         <Stack.Screen 
-          name="camera" 
+          name="challenge-detail" 
           options={{ 
-            title: 'Take Photo',
-            headerShown: true,
-          }} 
-        />
-        <Stack.Screen 
-          name="leaderboard" 
-          options={{ 
-            title: 'Leaderboard',
+            title: 'Challenge Details',
             headerShown: true,
           }} 
         />

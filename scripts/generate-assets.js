@@ -10,7 +10,7 @@ if (!fs.existsSync(assetsDir)) {
 // Create icon.png (1024x1024)
 const iconSvg = `
 <svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1024" height="1024" fill="#FF6B6B"/>
+  <rect width="1024" height="1024" fill="#000000"/>
   <text x="512" y="512" font-family="Arial" font-size="200" fill="white" text-anchor="middle" dominant-baseline="middle" font-weight="bold">FF</text>
 </svg>
 `;
@@ -18,7 +18,7 @@ const iconSvg = `
 // Create adaptive-icon.png (1024x1024)
 const adaptiveIconSvg = `
 <svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1024" height="1024" fill="#FF6B6B"/>
+  <rect width="1024" height="1024" fill="#000000"/>
   <text x="512" y="512" font-family="Arial" font-size="200" fill="white" text-anchor="middle" dominant-baseline="middle" font-weight="bold">FF</text>
 </svg>
 `;
@@ -27,14 +27,14 @@ const adaptiveIconSvg = `
 const splashSvg = `
 <svg width="2048" height="2048" xmlns="http://www.w3.org/2000/svg">
   <rect width="2048" height="2048" fill="#ffffff"/>
-  <text x="1024" y="1024" font-family="Arial" font-size="300" fill="#FF6B6B" text-anchor="middle" dominant-baseline="middle" font-weight="bold">Foto Fight</text>
+  <text x="1024" y="1024" font-family="Arial" font-size="300" fill="#000000" text-anchor="middle" dominant-baseline="middle" font-weight="bold">Foto Fight</text>
 </svg>
 `;
 
 // Create favicon.png (48x48)
 const faviconSvg = `
 <svg width="48" height="48" xmlns="http://www.w3.org/2000/svg">
-  <rect width="48" height="48" fill="#FF6B6B"/>
+  <rect width="48" height="48" fill="#000000"/>
   <text x="24" y="24" font-family="Arial" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle" font-weight="bold">FF</text>
 </svg>
 `;
