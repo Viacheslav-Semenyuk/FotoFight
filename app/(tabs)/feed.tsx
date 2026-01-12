@@ -9,10 +9,12 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { photoService, Post, CURRENT_USER_ID } from '../../services';
+import { photoService, Post } from '../../services';
+import { useAuth } from '../../contexts/AuthContext';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 import FeedImage from '../../components/FeedImage';
 
@@ -25,6 +27,7 @@ export default function FeedScreen() {
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
   const insets = useSafeAreaInsets();
+  const { user: authUser } = useAuth();
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -99,7 +102,7 @@ export default function FeedScreen() {
           style={styles.userInfo}
           onPress={() => {
             // Navigate to profile - if it's current user, go to profile tab
-            if (item.userId === CURRENT_USER_ID) {
+            if (authUser && item.userId === authUser.id) {
               router.push('/(tabs)/profile');
             } else {
               // Navigate to user's profile page (within tabs)
@@ -107,10 +110,18 @@ export default function FeedScreen() {
             }
           }}
         >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {item.username.charAt(0).toUpperCase()}
-            </Text>
+          <View style={[styles.avatar, !item.avatarUrl && styles.avatarWithText]}>
+            {item.avatarUrl ? (
+              <Image
+                source={{ uri: item.avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {item.username.charAt(0).toUpperCase()}
+              </Text>
+            )}
           </View>
           <Text style={styles.username}>{item.username}</Text>
         </Pressable>
@@ -252,10 +263,17 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarWithText: {
+    backgroundColor: '#000',
   },
   avatarText: {
     color: '#fff',

@@ -6,9 +6,11 @@ import {
   FlatList,
   ActivityIndicator,
   Pressable,
+  Image,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { userService, User, CURRENT_USER_ID } from '../../services';
+import { userService, User } from '../../services';
+import { useAuth } from '../../contexts/AuthContext';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 
 export default function LeaderboardScreen() {
@@ -17,6 +19,7 @@ export default function LeaderboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
+  const { user: authUser } = useAuth();
 
   // Load leaderboard when screen comes into focus
   useFocusEffect(
@@ -34,7 +37,7 @@ export default function LeaderboardScreen() {
   );
 
   const handleUserPress = (userId: string) => {
-    if (userId === CURRENT_USER_ID) {
+    if (authUser && userId === authUser.id) {
       router.push('/(tabs)/profile');
     } else {
       router.push(`/(tabs)/user/${userId}`);
@@ -42,7 +45,7 @@ export default function LeaderboardScreen() {
   };
 
   const renderItem = ({ item, index }: { item: User; index: number }) => {
-    const isCurrentUser = item.id === CURRENT_USER_ID;
+    const isCurrentUser = authUser && item.id === authUser.id;
     
     return (
       <View style={[styles.item, isCurrentUser && styles.currentUserItem]}>
@@ -51,10 +54,18 @@ export default function LeaderboardScreen() {
           style={styles.userPressable}
           onPress={() => handleUserPress(item.id)}
         >
-          <View style={[styles.avatar, isCurrentUser && styles.currentUserAvatar]}>
-            <Text style={styles.avatarText}>
-              {item.username.charAt(0).toUpperCase()}
-            </Text>
+          <View style={[styles.avatar, !item.avatarUrl && styles.avatarWithText]}>
+            {item.avatarUrl ? (
+              <Image
+                source={{ uri: item.avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {item.username.charAt(0).toUpperCase()}
+              </Text>
+            )}
           </View>
           <View style={styles.userInfo}>
             <Text style={[styles.username, isCurrentUser && styles.currentUserName]}>
@@ -148,13 +159,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    overflow: 'hidden',
   },
-  currentUserAvatar: {
-    backgroundColor: '#333',
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarWithText: {
+    backgroundColor: '#000',
   },
   avatarText: {
     color: '#fff',

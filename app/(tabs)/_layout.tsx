@@ -143,6 +143,14 @@ export default function TabsLayout() {
               href: null, // Hide from tab bar
             }}
           />
+          <Tabs.Screen
+            name="login"
+            options={{
+              title: 'Sign In',
+              headerTitle: 'Sign In',
+              href: null, // Hide from tab bar
+            }}
+          />
         </Tabs>
       </View>
     </View>

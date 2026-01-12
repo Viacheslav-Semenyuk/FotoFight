@@ -32,6 +32,7 @@ export interface Post {
   id: string;
   username: string;
   userId: string;
+  avatarUrl?: string;
   challengeId: string;
   challengeDescription: string;
   challengePoints: number;

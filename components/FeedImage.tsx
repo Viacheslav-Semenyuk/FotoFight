@@ -7,13 +7,14 @@ interface FeedImageProps {
   aspectRatio?: number; // width / height
 }
 
-// Instagram's aspect ratio limits
-const MIN_ASPECT_RATIO = 0.8; // Portrait limit (4:5)
+// Aspect ratio limits
+const MIN_ASPECT_RATIO_MOBILE = 0.75; // Portrait limit for mobile (3:4)
+const MIN_ASPECT_RATIO_DESKTOP = 0.8; // Portrait limit for desktop (4:5)
 const MAX_ASPECT_RATIO = 1.91; // Landscape limit (1.91:1)
 const MAX_HEIGHT_RATIO = 0.75; // Max 75% of viewport height
 
 export default function FeedImage({ uri, aspectRatio: providedAspectRatio }: FeedImageProps) {
-  const { height: screenHeight } = useResponsive();
+  const { height: screenHeight, isMobile } = useResponsive();
   const [imageAspectRatio, setImageAspectRatio] = useState<number>(providedAspectRatio || 1);
   const [loading, setLoading] = useState(!providedAspectRatio);
   const [error, setError] = useState(false);
@@ -47,8 +48,11 @@ export default function FeedImage({ uri, aspectRatio: providedAspectRatio }: Fee
     );
   }, [uri, providedAspectRatio]);
 
-  // Clamp aspect ratio to Instagram's limits for container sizing
-  const clampedAspectRatio = Math.max(MIN_ASPECT_RATIO, Math.min(MAX_ASPECT_RATIO, imageAspectRatio));
+  // Use different min aspect ratio for mobile vs desktop
+  const minAspectRatio = isMobile ? MIN_ASPECT_RATIO_MOBILE : MIN_ASPECT_RATIO_DESKTOP;
+  
+  // Clamp aspect ratio to limits for container sizing
+  const clampedAspectRatio = Math.max(minAspectRatio, Math.min(MAX_ASPECT_RATIO, imageAspectRatio));
   
   // Calculate container height based on clamped aspect ratio
   let containerHeight = containerWidth > 0 ? containerWidth / clampedAspectRatio : 0;
@@ -59,20 +63,22 @@ export default function FeedImage({ uri, aspectRatio: providedAspectRatio }: Fee
     containerHeight = maxContainerHeight;
   }
 
-  // Calculate the actual displayed image dimensions (for contain behavior)
-  // This handles images that don't match the container aspect ratio
-  const containerAspectRatio = containerWidth / (containerHeight || 1);
+  // On mobile, use cover mode to fill width without black bars
+  // On desktop, use contain mode with calculated dimensions
+  const useCoverMode = isMobile;
   
+  // Calculate display dimensions for contain mode (desktop)
   let displayWidth = containerWidth;
   let displayHeight = containerHeight;
   
-  if (containerWidth > 0 && containerHeight > 0) {
+  if (!useCoverMode && containerWidth > 0 && containerHeight > 0) {
+    const containerAspectRatio = containerWidth / containerHeight;
     if (imageAspectRatio > containerAspectRatio) {
-      // Image is wider than container - fit to width, show letterbox (black bars top/bottom)
+      // Image is wider than container - fit to width
       displayWidth = containerWidth;
       displayHeight = containerWidth / imageAspectRatio;
     } else if (imageAspectRatio < containerAspectRatio) {
-      // Image is taller than container - fit to height, show pillarbox (black bars left/right)
+      // Image is taller than container - fit to height
       displayHeight = containerHeight;
       displayWidth = containerHeight * imageAspectRatio;
     }
@@ -105,10 +111,10 @@ export default function FeedImage({ uri, aspectRatio: providedAspectRatio }: Fee
       <Image
         source={{ uri }}
         style={{
-          width: displayWidth,
-          height: displayHeight,
+          width: useCoverMode ? '100%' : displayWidth,
+          height: useCoverMode ? '100%' : displayHeight,
         }}
-        resizeMode="contain"
+        resizeMode={useCoverMode ? 'cover' : 'contain'}
       />
     </View>
   );

@@ -3,6 +3,10 @@ export { apiConfig, ApiResponse, PaginatedResponse, ApiError, apiCall, simulateN
 export { userService, UserStats } from './userService';
 export { challengeService, ChallengeWithStatus } from './challengeService';
 export { photoService, VerificationResult, SubmitPhotoRequest } from './photoService';
+export { authService, AuthResponse } from './authService';
+
+// Supabase client and types
+export { supabase, DbUser, DbChallenge, DbPhoto, DbUserChallenge } from './supabase';
 
 // Re-export types from mockData for convenience
 export { User, Challenge, Photo, Post, CURRENT_USER_ID, CURRENT_USERNAME } from '../data/mockData';

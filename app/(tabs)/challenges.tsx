@@ -36,6 +36,7 @@ export default function ChallengesScreen() {
   );
 
   const handleCameraPress = (challengeId: string) => {
+    // Always navigate to camera - it will show "Sign in to use the camera" if user is not authenticated
     router.push({
       pathname: '/(tabs)/camera',
       params: { preselectedChallengeId: challengeId },

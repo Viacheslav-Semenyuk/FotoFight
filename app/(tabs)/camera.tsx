@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,10 +29,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { challengeService, photoService, Challenge } from '../../services';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
+import { useAuth } from '../../contexts/AuthContext';
+import * as SecureStore from 'expo-secure-store';
 
 export default function CameraScreen() {
   const router = useRouter();
-  const { preselectedChallengeId } = useLocalSearchParams<{ preselectedChallengeId?: string }>();
+  const params = useLocalSearchParams<{ preselectedChallengeId?: string | string[] }>();
+  // Handle both string and array (expo-router can pass params as arrays)
+  const preselectedChallengeId = Array.isArray(params.preselectedChallengeId) 
+    ? params.preselectedChallengeId[0] 
+    : params.preselectedChallengeId;
+  
+  // Debug: log params
+  useEffect(() => {
+    console.log('[Camera] All params:', params);
+    console.log('[Camera] preselectedChallengeId:', preselectedChallengeId, typeof preselectedChallengeId);
+  }, [params, preselectedChallengeId]);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoAspectRatio, setPhotoAspectRatio] = useState<number>(1);
   const [photoMirrored, setPhotoMirrored] = useState(false);
@@ -44,86 +56,214 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [uncompletedChallenges, setUncompletedChallenges] = useState<Challenge[]>([]);
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState('');
+  const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+  const dropdownRef = useRef<View>(null);
+  const isTogglingRef = useRef(false);
+  const isUpdatingFromDropdownRef = useRef(false);
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
   const isWeb = Platform.OS === 'web';
+  const { user: authUser, loading: authLoading, signInWithGoogle, signInWithApple } = useAuth();
 
-  // Load challenges and handle preselected challenge
+  // Load preselected challenge immediately when it changes (works even if user is not authenticated)
+  useEffect(() => {
+    const loadPreselectedChallenge = async () => {
+      // Check if preselectedChallengeId exists and is not empty
+      if (preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '') {
+        console.log('[Camera] Loading preselected challenge:', preselectedChallengeId);
+        const challengeResponse = await challengeService.getChallenge(preselectedChallengeId);
+        if (challengeResponse.success && challengeResponse.data) {
+          console.log('[Camera] Preselected challenge loaded:', challengeResponse.data.title);
+          console.log('[Camera] Setting selectedChallenge to:', challengeResponse.data);
+          setSelectedChallenge(challengeResponse.data);
+        } else {
+          console.error('[Camera] Failed to load preselected challenge:', challengeResponse.error);
+        }
+      } else {
+        console.log('[Camera] No preselected challenge ID or invalid format:', preselectedChallengeId);
+      }
+    };
+    
+    loadPreselectedChallenge();
+  }, [preselectedChallengeId]);
+  
+  // Debug: log selectedChallenge when it changes
+  useEffect(() => {
+    console.log('[Camera] selectedChallenge changed:', selectedChallenge?.title || 'null');
+  }, [selectedChallenge]);
+  
+  // Restore preselected challenge in preview mode if it was lost
+  useEffect(() => {
+    // If we're in preview mode (capturedPhoto exists) and have preselectedChallengeId but no selectedChallenge
+    if (capturedPhoto && preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '' && !selectedChallenge) {
+      console.log('[Camera] Restoring preselected challenge in preview mode:', preselectedChallengeId);
+      challengeService.getChallenge(preselectedChallengeId).then((challengeResponse) => {
+        if (challengeResponse.success && challengeResponse.data) {
+          console.log('[Camera] Preselected challenge restored in preview:', challengeResponse.data.title);
+          setSelectedChallenge(challengeResponse.data);
+        }
+      });
+    }
+  }, [capturedPhoto, preselectedChallengeId, selectedChallenge]);
+
+  // Load challenges for the dropdown (only if user is authenticated)
   const loadChallenges = useCallback(async () => {
-    const response = await challengeService.getUncompletedChallenges();
-    if (response.success && response.data) {
-      setUncompletedChallenges(response.data);
+    // Only load uncompleted challenges if user is authenticated
+    if (authUser) {
+      const response = await challengeService.getUncompletedChallenges();
+      if (response.success && response.data) {
+        setUncompletedChallenges(response.data);
+      }
     }
     
-    // If there's a preselected challenge, load it
-    if (preselectedChallengeId) {
+    // If there's a preselected challenge, ensure it's loaded (works even if not authenticated)
+    if (preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '') {
       const challengeResponse = await challengeService.getChallenge(preselectedChallengeId);
       if (challengeResponse.success && challengeResponse.data) {
         setSelectedChallenge(challengeResponse.data);
       }
     }
-  }, [preselectedChallengeId]);
+  }, [preselectedChallengeId, authUser]);
+
+  // Track if we're in preview mode to prevent resetting capturedPhoto
+  const capturedPhotoRef = useRef<string | null>(null);
+  useEffect(() => {
+    capturedPhotoRef.current = capturedPhoto;
+  }, [capturedPhoto]);
 
   // Control camera activation based on screen focus
   useFocusEffect(
     useCallback(() => {
-      // Reset all state and activate camera when navigating to camera
+      console.log('[Camera] useFocusEffect triggered, preselectedChallengeId:', preselectedChallengeId);
+      
+      // Check if we're updating from dropdown selection
+      // If so, don't reset state to prevent camera from reopening
+      if (isUpdatingFromDropdownRef.current) {
+        console.log('[Camera] Update from dropdown, skipping state reset');
+        // Just update the selected challenge if needed
+        const hasPreselected = preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '';
+        if (hasPreselected) {
+          challengeService.getChallenge(preselectedChallengeId).then((challengeResponse) => {
+            if (challengeResponse.success && challengeResponse.data) {
+              setSelectedChallenge(challengeResponse.data);
+            }
+          });
+        }
+        return;
+      }
+      
+      // Always reset state when navigating to camera tab (unless updating from dropdown)
+      // This ensures camera view is shown, not preview mode
+      console.log('[Camera] Resetting state for camera tab navigation');
       setCapturedPhoto(null);
       setPhotoAspectRatio(1);
       setPhotoMirrored(false);
       setShowChallengeDropdown(false);
-      setSelectedChallenge(null);
       setIsSubmitting(false);
+      setIsCapturing(false);
       setNotification(null);
       setIsCameraActive(true);
       
-      // Load challenges
-      loadChallenges();
+      // Check if there's a preselected challenge
+      const hasPreselected = preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '';
+      
+      if (!hasPreselected) {
+        console.log('[Camera] No preselected challenge, clearing selectedChallenge');
+        setSelectedChallenge(null);
+      } else {
+        console.log('[Camera] Preselected challenge exists, will load it');
+        // Load the preselected challenge immediately
+        challengeService.getChallenge(preselectedChallengeId).then((challengeResponse) => {
+          if (challengeResponse.success && challengeResponse.data) {
+            console.log('[Camera] Preselected challenge loaded in useFocusEffect:', challengeResponse.data.title);
+            setSelectedChallenge(challengeResponse.data);
+          }
+        });
+      }
+      
+      // Load challenges (this will set preselectedChallengeId if it exists)
+      // Only load if user is authenticated (to avoid unnecessary calls)
+      if (authUser) {
+        loadChallenges();
+      }
 
       // Cleanup: deactivate camera when leaving the screen
       return () => {
         setIsCameraActive(false);
+        setIsCapturing(false);
       };
-    }, [loadChallenges])
+    }, [loadChallenges, preselectedChallengeId, authUser])
   );
 
   const handleCapture = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync();
-        if (photo) {
-          setCapturedPhoto(photo.uri);
-          // Calculate aspect ratio from photo dimensions
-          if (photo.width && photo.height) {
-            setPhotoAspectRatio(photo.width / photo.height);
-          } else {
-            // Fallback: load image to get dimensions (for web)
-            Image.getSize(photo.uri, (width, height) => {
-              setPhotoAspectRatio(width / height);
-            }, () => {
-              setPhotoAspectRatio(4/3); // Default webcam aspect ratio
+    // Prevent multiple captures
+    if (isCapturing) return;
+    
+    // Check if camera is active - silently return if not ready
+    if (!isCameraActive) {
+      return;
+    }
+
+    // Check if permission is granted - silently return if not granted
+    if (!permission?.granted) {
+      return;
+    }
+
+    // Check if camera ref is available (with a small delay to allow camera to initialize)
+    if (!cameraRef.current) {
+      // Give camera a moment to initialize after retake
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Silently return if camera is still not ready
+      if (!cameraRef.current) {
+        return;
+      }
+    }
+
+    setIsCapturing(true);
+    
+    try {
+      const photo = await cameraRef.current.takePictureAsync();
+      if (photo && photo.uri) {
+        setCapturedPhoto(photo.uri);
+        // Don't clear selected challenge when taking a photo if there's a preselectedChallengeId
+        // It should remain selected so user can submit the photo for that challenge
+        const hasPreselected = preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '';
+        if (!hasPreselected) {
+          setSelectedChallenge(null);
+        } else {
+          // Ensure preselected challenge is still selected after capture
+          // It might have been cleared, so reload it
+          if (!selectedChallenge) {
+            challengeService.getChallenge(preselectedChallengeId).then((challengeResponse) => {
+              if (challengeResponse.success && challengeResponse.data) {
+                setSelectedChallenge(challengeResponse.data);
+              }
             });
           }
-          // On web, webcams are typically front-facing and browser mirrors the preview
-          // On native, mirror only if using front camera
-          setPhotoMirrored(isWeb || facing === 'front');
         }
-      } catch (error) {
-        // Fallback to mock photo if camera fails
-        const randomId = Math.floor(Math.random() * 1000);
-        const mockPhotoUri = `https://picsum.photos/800/600?random=${randomId}`;
-        setCapturedPhoto(mockPhotoUri);
-        setPhotoAspectRatio(4/3);
-        setPhotoMirrored(false);
+        // Calculate aspect ratio from photo dimensions
+        if (photo.width && photo.height) {
+          setPhotoAspectRatio(photo.width / photo.height);
+        } else {
+          // Fallback: load image to get dimensions (for web)
+          Image.getSize(photo.uri, (width, height) => {
+            setPhotoAspectRatio(width / height);
+          }, () => {
+            setPhotoAspectRatio(4/3); // Default webcam aspect ratio
+          });
+        }
+        // On web, webcams are typically front-facing and browser mirrors the preview
+        // On native, mirror only if using front camera
+        setPhotoMirrored(isWeb || facing === 'front');
       }
-    } else {
-      // Mock photo for web or when camera not available
-      const randomId = Math.floor(Math.random() * 1000);
-      const mockPhotoUri = `https://picsum.photos/800/600?random=${randomId}`;
-      setCapturedPhoto(mockPhotoUri);
-      setPhotoAspectRatio(4/3);
-      setPhotoMirrored(false);
+      // Silently fail if photo is invalid
+    } catch (error) {
+      // Silently fail - don't show error notification
+    } finally {
+      setIsCapturing(false);
     }
   };
 
@@ -133,19 +273,89 @@ export default function CameraScreen() {
 
   const handleRetake = () => {
     setCapturedPhoto(null);
-    if (!preselectedChallengeId) {
+    setIsCapturing(false);
+    setNotification(null);
+    // Always ensure camera is active when retaking
+    setIsCameraActive(true);
+    // Don't clear selected challenge on retake if there's a preselectedChallengeId
+    // It will be preserved so user can retake photo for the same challenge
+    const hasPreselected = preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '';
+    if (!hasPreselected) {
       setSelectedChallenge(null);
+    } else {
+      // Ensure preselected challenge is still selected after retake
+      // It might have been cleared, so reload it
+      if (!selectedChallenge) {
+        challengeService.getChallenge(preselectedChallengeId).then((challengeResponse) => {
+          if (challengeResponse.success && challengeResponse.data) {
+            setSelectedChallenge(challengeResponse.data);
+          }
+        });
+      }
     }
   };
 
   const handleToggleDropdown = () => {
+    isTogglingRef.current = true;
     setShowChallengeDropdown(prev => !prev);
+    // Reset flag after state update
+    setTimeout(() => {
+      isTogglingRef.current = false;
+    }, 100);
   };
 
   const handleChallengeSelect = (challenge: Challenge) => {
     setSelectedChallenge(challenge);
+    // Mark that we're updating from dropdown to prevent useFocusEffect from resetting state
+    isUpdatingFromDropdownRef.current = true;
+    // Update URL parameter to preserve selected challenge after retake
+    router.setParams({ preselectedChallengeId: challenge.id });
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isUpdatingFromDropdownRef.current = false;
+    }, 100);
+    // Close dropdown immediately
     setShowChallengeDropdown(false);
   };
+
+  // Close dropdown when clicking outside (for web)
+  useEffect(() => {
+    if (!showChallengeDropdown || Platform.OS !== 'web') return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (typeof document === 'undefined') return;
+      
+      // Ignore if we're in the middle of toggling
+      if (isTogglingRef.current) {
+        return;
+      }
+      
+      const target = event.target as HTMLElement;
+      
+      // Check if click is inside dropdown container by checking data attribute
+      // The container includes both the button and the dropdown menu
+      const clickedInside = target.closest('[data-dropdown="true"]');
+      
+      if (!clickedInside) {
+        // Use setTimeout to allow onPress handlers to fire first
+        setTimeout(() => {
+          setShowChallengeDropdown(false);
+        }, 0);
+      }
+    };
+
+    // Use a delay to avoid immediate closure when opening dropdown
+    // This allows the toggle button click to complete first
+    const timeoutId = setTimeout(() => {
+      // Use 'mouseup' instead of 'mousedown' to allow onPress to fire first
+      document.addEventListener('mouseup', handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mouseup', handleClickOutside);
+    };
+  }, [showChallengeDropdown]);
 
   const handleSubmit = async () => {
     if (!capturedPhoto || !selectedChallenge || isSubmitting) return;
@@ -172,6 +382,10 @@ export default function CameraScreen() {
             type: 'success', 
             message: `Photo verified! You earned ${selectedChallenge.points} points!` 
           });
+
+          // Clear selected challenge and captured photo after successful submission
+          setSelectedChallenge(null);
+          setCapturedPhoto(null);
 
           // Redirect after 2 seconds
           setTimeout(() => {
@@ -242,7 +456,7 @@ export default function CameraScreen() {
                 <Ionicons name="refresh" size={24} color="#fff" />
               </Pressable>
 
-              <View style={styles.dropdownContainer}>
+              <View ref={dropdownRef} style={styles.dropdownContainer} data-dropdown="true">
                 <Pressable
                   style={({ hovered }: WebPressableState) => [styles.challengeButton, hovered && styles.challengeButtonHovered]}
                   onPress={handleToggleDropdown}
@@ -262,24 +476,72 @@ export default function CameraScreen() {
                 </Pressable>
 
                 {showChallengeDropdown && (
-                  <View style={styles.dropdown}>
-                    <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
-                      {uncompletedChallenges.map((item) => (
-                        <Pressable
-                          key={item.id}
-                          style={({ hovered }: WebPressableState) => [styles.dropdownItem, hovered && styles.dropdownItemHovered]}
-                          onPress={() => handleChallengeSelect(item)}
-                        >
-                          <View style={styles.dropdownItemContent}>
-                            <Text style={styles.dropdownItemTitle}>{item.title}</Text>
-                            {item.description ? (
-                              <Text style={styles.dropdownItemDescription} numberOfLines={2}>{item.description}</Text>
-                            ) : null}
-                          </View>
-                          <Text style={styles.dropdownItemPoints}>{item.points} pts</Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
+                  <View style={styles.dropdown} data-dropdown="true">
+                    {uncompletedChallenges.length === 0 && !selectedChallenge ? (
+                      <View style={styles.dropdownItem}>
+                        <Text style={styles.dropdownItemTitle}>No challenges available</Text>
+                      </View>
+                    ) : (
+                      <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+                        {/* Show selected challenge first if it's not in uncompletedChallenges */}
+                        {selectedChallenge && !uncompletedChallenges.find(c => c.id === selectedChallenge.id) && (
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.dropdownItem,
+                              styles.dropdownItemSelected,
+                              pressed && styles.dropdownItemPressed
+                            ]}
+                            onPress={() => handleChallengeSelect(selectedChallenge)}
+                          >
+                            <View style={styles.dropdownItemContent}>
+                              <Text style={styles.dropdownItemTitleSelected}>
+                                {selectedChallenge.title} ✓
+                              </Text>
+                              {selectedChallenge.description ? (
+                                <Text style={styles.dropdownItemDescription} numberOfLines={2}>{selectedChallenge.description}</Text>
+                              ) : null}
+                            </View>
+                            <Text style={styles.dropdownItemPointsSelected}>
+                              {selectedChallenge.points} pts
+                            </Text>
+                          </Pressable>
+                        )}
+                        {/* Show all uncompleted challenges */}
+                        {uncompletedChallenges.map((item) => {
+                          const isSelected = selectedChallenge?.id === item.id;
+                          return (
+                            <Pressable
+                              key={item.id}
+                              style={({ pressed }) => [
+                                styles.dropdownItem,
+                                isSelected && styles.dropdownItemSelected,
+                                pressed && styles.dropdownItemPressed
+                              ]}
+                              onPress={() => handleChallengeSelect(item)}
+                            >
+                              <View style={styles.dropdownItemContent}>
+                                <Text style={[
+                                  styles.dropdownItemTitle,
+                                  isSelected && styles.dropdownItemTitleSelected
+                                ]}>
+                                  {item.title}
+                                  {isSelected && ' ✓'}
+                                </Text>
+                                {item.description ? (
+                                  <Text style={styles.dropdownItemDescription} numberOfLines={2}>{item.description}</Text>
+                                ) : null}
+                              </View>
+                              <Text style={[
+                                styles.dropdownItemPoints,
+                                isSelected && styles.dropdownItemPointsSelected
+                              ]}>
+                                {item.points} pts
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    )}
                   </View>
                 )}
               </View>
@@ -306,6 +568,137 @@ export default function CameraScreen() {
     );
   }
 
+  // Check authentication
+  if (authLoading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.permissionText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  const handleGoogleSignIn = async () => {
+    setSigningIn(true);
+    setSignInError('');
+
+    // Save returnTo and preselectedChallengeId for callback (web: localStorage, native: SecureStore)
+    const returnTo = '/(tabs)/camera';
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('auth_returnTo', returnTo);
+      if (preselectedChallengeId) {
+        window.localStorage.setItem('auth_preselectedChallengeId', preselectedChallengeId);
+      }
+    } else {
+      await SecureStore.setItemAsync('auth_returnTo', returnTo);
+      if (preselectedChallengeId) {
+        await SecureStore.setItemAsync('auth_preselectedChallengeId', preselectedChallengeId);
+      }
+    }
+
+    const result = await signInWithGoogle();
+    if (!result.success) {
+      setSignInError(result.error || 'Failed to sign in with Google');
+      // Clear stored values on error
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('auth_returnTo');
+        window.localStorage.removeItem('auth_preselectedChallengeId');
+      } else {
+        await SecureStore.deleteItemAsync('auth_returnTo');
+        await SecureStore.deleteItemAsync('auth_preselectedChallengeId');
+      }
+    }
+    // For web, callback will handle redirect
+    // For native, redirect is handled in login.tsx or callback
+    setSigningIn(false);
+  };
+
+  const handleAppleSignIn = async () => {
+    setSigningIn(true);
+    setSignInError('');
+
+    // Save returnTo and preselectedChallengeId for callback (web: localStorage, native: SecureStore)
+    const returnTo = '/(tabs)/camera';
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('auth_returnTo', returnTo);
+      if (preselectedChallengeId) {
+        window.localStorage.setItem('auth_preselectedChallengeId', preselectedChallengeId);
+      }
+    } else {
+      await SecureStore.setItemAsync('auth_returnTo', returnTo);
+      if (preselectedChallengeId) {
+        await SecureStore.setItemAsync('auth_preselectedChallengeId', preselectedChallengeId);
+      }
+    }
+
+    const result = await signInWithApple();
+    if (!result.success) {
+      setSignInError(result.error || 'Failed to sign in with Apple');
+      // Clear stored values on error
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('auth_returnTo');
+        window.localStorage.removeItem('auth_preselectedChallengeId');
+      } else {
+        await SecureStore.deleteItemAsync('auth_returnTo');
+        await SecureStore.deleteItemAsync('auth_preselectedChallengeId');
+      }
+    }
+    // For web, callback will handle redirect
+    // For native, redirect is handled in login.tsx or callback
+    setSigningIn(false);
+  };
+
+  if (!authUser) {
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.permissionContainer}>
+          <Ionicons name="lock-closed-outline" size={60} color="#fff" />
+          <Text style={styles.permissionText}>Sign in to use the camera</Text>
+          
+          {signInError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{signInError}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.authButtonsContainer}>
+            <Pressable
+              style={[styles.googleButton, signingIn && styles.buttonDisabled]}
+              onPress={handleGoogleSignIn}
+              disabled={signingIn}
+            >
+              {signingIn ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#fff" />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
+              )}
+            </Pressable>
+
+            {Platform.OS === 'ios' && (
+              <Pressable
+                style={[styles.appleButton, signingIn && styles.buttonDisabled]}
+                onPress={handleAppleSignIn}
+                disabled={signingIn}
+              >
+                {signingIn ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-apple" size={20} color="#000" />
+                    <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   // Permission not granted yet
   if (!permission) {
     return (
@@ -319,7 +712,7 @@ export default function CameraScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.permissionContainer}>
-          <Ionicons name="camera-outline" size={60} color="#000" />
+          <Ionicons name="camera-outline" size={60} color="#fff" />
           <Text style={styles.permissionText}>Camera access required</Text>
           <Pressable style={styles.permissionButton} onPress={requestPermission}>
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
@@ -342,7 +735,33 @@ export default function CameraScreen() {
             videoStabilizationMode="off"
           />
         ) : (
-          <View style={styles.cameraView} />
+          <View style={styles.cameraView}>
+            <View style={styles.cameraUnavailableOverlay}>
+              <Ionicons name="camera-outline" size={48} color="#fff" />
+              <Text style={styles.cameraUnavailableText}>Camera initializing...</Text>
+            </View>
+          </View>
+        )}
+        {notification && (
+          <View style={styles.notificationOverlay}>
+            <View style={[
+              styles.notificationBox,
+              notification.type === 'success' && styles.notificationSuccess,
+              notification.type === 'error' && styles.notificationError,
+              notification.type === 'loading' && styles.notificationLoading,
+            ]}>
+              {notification.type === 'loading' && (
+                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 10 }} />
+              )}
+              {notification.type === 'success' && (
+                <Ionicons name="checkmark-circle" size={24} color="#fff" style={{ marginRight: 10 }} />
+              )}
+              {notification.type === 'error' && (
+                <Ionicons name="close-circle" size={24} color="#fff" style={{ marginRight: 10 }} />
+              )}
+              <Text style={styles.notificationText}>{notification.message}</Text>
+            </View>
+          </View>
         )}
         <View style={[styles.cameraControls, centerContent && styles.cameraControlsDesktop]}>
           {!(isDesktop && isWeb) && (
@@ -356,12 +775,21 @@ export default function CameraScreen() {
           <Pressable
             style={({ hovered, pressed }: WebPressableState) => [
               styles.captureButton,
-              hovered && styles.captureButtonHovered,
-              pressed && styles.captureButtonPressed,
+              (!isCameraActive || !permission?.granted || isCapturing) && styles.captureButtonDisabled,
+              hovered && isCameraActive && permission?.granted && !isCapturing && styles.captureButtonHovered,
+              pressed && isCameraActive && permission?.granted && !isCapturing && styles.captureButtonPressed,
             ]}
             onPress={handleCapture}
+            disabled={!isCameraActive || !permission?.granted || isCapturing}
           >
             <View style={styles.captureButtonInner} />
+            {isCapturing && (
+              <ActivityIndicator 
+                size="small" 
+                color="#fff" 
+                style={styles.captureButtonLoader} 
+              />
+            )}
           </Pressable>
           {!(isDesktop && isWeb) && <View style={styles.flipButtonPlaceholder} />}
         </View>
@@ -385,13 +813,82 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  permissionSubtext: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
     marginBottom: 24,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  authButtonsContainer: {
+    width: '100%',
+    maxWidth: 300,
+    gap: 12,
+    marginTop: 8,
+  },
+  googleButton: {
+    backgroundColor: '#4285F4',
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 48,
+  },
+  googleButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appleButton: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  appleButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 238, 238, 0.95)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 204, 204, 0.8)',
+    width: '100%',
+    maxWidth: 300,
+  },
+  errorText: {
+    color: '#c00',
+    fontSize: 14,
+    textAlign: 'center',
   },
   permissionButton: {
     backgroundColor: '#000',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+    minWidth: 200,
+    alignItems: 'center',
+    marginBottom: 12,
   },
   permissionButtonText: {
     color: '#fff',
@@ -411,6 +908,18 @@ const styles = StyleSheet.create({
   cameraView: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  cameraUnavailableOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+  },
+  cameraUnavailableText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: 'center',
   },
   cameraControls: {
     backgroundColor: '#1a1a1a',
@@ -457,6 +966,12 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     backgroundColor: '#000',
   },
+  captureButtonDisabled: {
+    opacity: 0.5,
+  },
+  captureButtonLoader: {
+    position: 'absolute',
+  },
   previewWrapper: {
     flex: 1,
     width: '100%',
@@ -481,6 +996,7 @@ const styles = StyleSheet.create({
     height: 140,
     paddingHorizontal: 16,
     justifyContent: 'center',
+    overflow: 'visible',
   },
   previewControlsDesktop: {
     backgroundColor: '#262626',
@@ -504,6 +1020,8 @@ const styles = StyleSheet.create({
   dropdownContainer: {
     flex: 1,
     position: 'relative',
+    zIndex: 100,
+    overflow: 'visible',
   },
   challengeButton: {
     flexDirection: 'row',
@@ -544,6 +1062,8 @@ const styles = StyleSheet.create({
     elevation: 5,
     maxHeight: 200,
     overflow: 'hidden',
+    zIndex: 1000,
+    minHeight: 50,
   },
   dropdownScroll: {
     maxHeight: 200,
@@ -557,8 +1077,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
-  dropdownItemHovered: {
+  dropdownItemPressed: {
     backgroundColor: '#f9f9f9',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#e8f5e9',
+    borderLeftWidth: 3,
+    borderLeftColor: '#4CAF50',
   },
   dropdownItemContent: {
     flex: 1,
@@ -567,6 +1092,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#262626',
     fontWeight: '500',
+  },
+  dropdownItemTitleSelected: {
+    color: '#2e7d32',
+    fontWeight: '600',
   },
   dropdownItemDescription: {
     fontSize: 12,
@@ -577,6 +1106,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#000',
     fontWeight: '600',
+  },
+  dropdownItemPointsSelected: {
+    color: '#2e7d32',
+    fontWeight: '700',
   },
   submitButton: {
     width: 48,

@@ -99,10 +99,18 @@ export default function UserProfileScreen() {
       >
         {/* Profile Header */}
         <View style={[styles.header, centerContent && styles.headerDesktop]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user.username.charAt(0).toUpperCase()}
-            </Text>
+          <View style={[styles.avatar, !user.avatarUrl && styles.avatarWithText]}>
+            {user.avatarUrl ? (
+              <Image
+                source={{ uri: user.avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {user.username.charAt(0).toUpperCase()}
+              </Text>
+            )}
           </View>
           <View style={styles.infoContainer}>
             <Text style={styles.username}>{user.username}</Text>
@@ -178,10 +186,18 @@ export default function UserProfileScreen() {
                 {/* Header */}
                 <View style={styles.feedPostHeader}>
                   <View style={styles.feedUserInfo}>
-                    <View style={styles.feedAvatar}>
-                      <Text style={styles.feedAvatarText}>
-                        {user.username.charAt(0).toUpperCase()}
-                      </Text>
+                    <View style={[styles.feedAvatar, !user.avatarUrl && styles.feedAvatarWithText]}>
+                      {user.avatarUrl ? (
+                        <Image
+                          source={{ uri: user.avatarUrl }}
+                          style={styles.feedAvatarImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text style={styles.feedAvatarText}>
+                          {user.username.charAt(0).toUpperCase()}
+                        </Text>
+                      )}
                     </View>
                     <Text style={styles.feedUsername}>{user.username}</Text>
                   </View>
@@ -248,10 +264,17 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarWithText: {
+    backgroundColor: '#000',
   },
   avatarText: {
     color: '#fff',
@@ -358,10 +381,17 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6,
+    overflow: 'hidden',
+  },
+  feedAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  feedAvatarWithText: {
+    backgroundColor: '#000',
   },
   feedAvatarText: {
     color: '#fff',
