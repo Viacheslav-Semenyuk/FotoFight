@@ -49,7 +49,7 @@
           "mediaLibraryPermission": "Allow Foto Fight to access your photos to submit challenges."
         }
       ],
-      "expo-router"
+      "expo-font"
     ],
     "scheme": "foto-fight",
     "extra": {
