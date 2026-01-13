@@ -86,6 +86,26 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Storage bucket name
 export const PHOTOS_BUCKET = 'photos';
 
+/**
+ * Get avatar file path from avatar URL
+ * Extracts the path from a Supabase Storage public URL
+ */
+export function getAvatarPathFromUrl(url: string): string | null {
+  try {
+    // Extract path from URL like: https://xxx.supabase.co/storage/v1/object/public/photos/userId/avatar.jpg
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    const publicIndex = pathParts.indexOf('public');
+    if (publicIndex !== -1 && pathParts[publicIndex + 1]) {
+      // Return path like: userId/avatar.jpg
+      return pathParts.slice(publicIndex + 2).join('/');
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Database types based on our schema
 export interface DbUser {
   id: string;
@@ -196,6 +216,107 @@ export async function uriToBlob(uri: string): Promise<Blob | ArrayBuffer> {
   // For React Native local file URIs (file://) on iOS
   const response = await fetch(uri);
   return await response.blob();
+}
+
+/**
+ * Upload avatar to Supabase Storage
+ * @param file - File, Blob, or ArrayBuffer to upload (ArrayBuffer required on Android)
+ * @param userId - User ID
+ * @returns Public URL of uploaded avatar
+ */
+export async function uploadAvatar(
+  file: Blob | File | ArrayBuffer,
+  userId: string
+): Promise<string> {
+  const fileExt = file instanceof File ? file.name.split('.').pop() : 'jpg';
+  const fileName = `${userId}/avatar.${fileExt}`;
+
+  // Determine content type
+  const contentType = file instanceof File ? file.type : 'image/jpeg';
+
+  // Delete old avatar if exists
+  try {
+    const { data: listData } = await supabase.storage
+      .from(PHOTOS_BUCKET)
+      .list(userId);
+    
+    if (listData) {
+      const oldAvatars = listData.filter(f => f.name.startsWith('avatar.'));
+      if (oldAvatars.length > 0) {
+        const pathsToRemove = oldAvatars.map(f => `${userId}/${f.name}`);
+        await supabase.storage
+          .from(PHOTOS_BUCKET)
+          .remove(pathsToRemove);
+      }
+    }
+  } catch (error) {
+    // Ignore errors when deleting old avatar
+    console.warn('Could not delete old avatar:', error);
+  }
+
+  // Upload new avatar (use upsert to replace if exists)
+  const { data, error } = await supabase.storage
+    .from(PHOTOS_BUCKET)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: contentType,
+    });
+
+  if (error) {
+    throw new Error(`Failed to upload avatar: ${error.message}`);
+  }
+
+  // Get public URL
+  const { data: urlData } = supabase.storage
+    .from(PHOTOS_BUCKET)
+    .getPublicUrl(data.path);
+
+  return urlData.publicUrl;
+}
+
+/**
+ * Delete avatar from Supabase Storage
+ * @param userId - User ID
+ * @param avatarUrl - Optional avatar URL to extract path from
+ * @returns Success status
+ */
+export async function deleteAvatar(userId: string, avatarUrl?: string): Promise<void> {
+  // Try to delete using the URL path first
+  if (avatarUrl) {
+    const path = getAvatarPathFromUrl(avatarUrl);
+    if (path) {
+      const { error } = await supabase.storage
+        .from(PHOTOS_BUCKET)
+        .remove([path]);
+      if (!error) return;
+    }
+  }
+
+  // Fallback: list files and delete avatar files
+  const { data: listData, error: listError } = await supabase.storage
+    .from(PHOTOS_BUCKET)
+    .list(userId);
+
+  if (listError) {
+    throw new Error(`Failed to list avatar files: ${listError.message}`);
+  }
+
+  if (listData) {
+    const avatarFiles = listData
+      .filter(f => f.name.startsWith('avatar.'))
+      .map(f => `${userId}/${f.name}`);
+
+    if (avatarFiles.length > 0) {
+      const { error: deleteError } = await supabase.storage
+        .from(PHOTOS_BUCKET)
+        .remove(avatarFiles);
+
+      if (deleteError) {
+        throw new Error(`Failed to delete avatar: ${deleteError.message}`);
+      }
+    }
+  }
 }
 
 /**

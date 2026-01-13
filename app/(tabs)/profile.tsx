@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,16 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { userService, photoService, User, Photo } from '../../services';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 import { useAuth } from '../../contexts/AuthContext';
 import FeedImage from '../../components/FeedImage';
+import AvatarMenu from '../../components/AvatarMenu';
 import * as SecureStore from 'expo-secure-store';
 
 export default function ProfileScreen() {
@@ -26,6 +29,9 @@ export default function ProfileScreen() {
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState('');
   const [gridWidth, setGridWidth] = useState(0);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
+  const avatarRef = useRef<View>(null);
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
   const { width } = useWindowDimensions();
@@ -90,6 +96,86 @@ export default function ProfileScreen() {
   const handleSignOut = async () => {
     await signOut();
     // Stay on profile page - it will show login buttons when not authenticated
+  };
+
+  const handleAvatarPress = () => {
+    setShowAvatarMenu(true);
+  };
+
+  const handleChangeAvatar = async () => {
+    setShowAvatarMenu(false);
+    
+    // Request permissions
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission denied', 'Sorry, we need camera roll permissions to change your avatar!');
+      return;
+    }
+
+    // Launch image picker
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0 && authUser) {
+      setIsUpdatingAvatar(true);
+      try {
+        const asset = result.assets[0];
+        const response = await userService.updateAvatar(authUser.id, asset.uri);
+        
+        if (response.success && response.data) {
+          setUser(response.data);
+          Alert.alert('Success', 'Avatar updated successfully!');
+        } else {
+          Alert.alert('Error', response.error || 'Failed to update avatar');
+        }
+      } catch (error) {
+        Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update avatar');
+      } finally {
+        setIsUpdatingAvatar(false);
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setShowAvatarMenu(false);
+    
+    if (!authUser) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
+    // Remove avatar directly without confirmation
+    await performRemoveAvatar();
+  };
+
+  const performRemoveAvatar = async () => {
+    if (!authUser) {
+      console.error('performRemoveAvatar: authUser is null');
+      return;
+    }
+    
+    console.log('performRemoveAvatar: starting removal for user', authUser.id);
+    setIsUpdatingAvatar(true);
+    try {
+      const response = await userService.removeAvatar(authUser.id);
+      console.log('performRemoveAvatar: response received', response);
+      if (response.success && response.data) {
+        setUser(response.data);
+        Alert.alert('Success', 'Avatar removed successfully!');
+      } else {
+        console.error('performRemoveAvatar: failed', response.error);
+        Alert.alert('Error', response.error || 'Failed to remove avatar');
+      }
+    } catch (error) {
+      console.error('Error removing avatar:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to remove avatar');
+    } finally {
+      setIsUpdatingAvatar(false);
+    }
   };
 
   // Show loading while checking auth
@@ -223,19 +309,38 @@ export default function ProfileScreen() {
       >
         {/* Profile Header */}
         <View style={[styles.header, centerContent && styles.headerDesktop]}>
-          <View style={[styles.avatar, !user.avatarUrl && styles.avatarWithText]}>
-            {user.avatarUrl ? (
-              <Image
-                source={{ uri: user.avatarUrl }}
-                style={styles.avatarImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {user.username.charAt(0).toUpperCase()}
-              </Text>
+          <Pressable
+            onPress={handleAvatarPress}
+            disabled={isUpdatingAvatar}
+            style={styles.avatarContainer}
+          >
+            <View 
+              ref={avatarRef}
+              style={[styles.avatar, !user.avatarUrl && styles.avatarWithText]}
+            >
+              {user.avatarUrl ? (
+                <Image
+                  source={{ uri: user.avatarUrl }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {user.username.charAt(0).toUpperCase()}
+                </Text>
+              )}
+              {isUpdatingAvatar && (
+                <View style={styles.avatarOverlay}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+            </View>
+            {!isUpdatingAvatar && (
+              <View style={styles.avatarEditIcon}>
+                <Ionicons name="camera" size={16} color="#fff" />
+              </View>
             )}
-          </View>
+          </Pressable>
           <View style={styles.infoContainer}>
             <Text style={styles.username}>{user.username}</Text>
             {/* Stats */}
@@ -367,6 +472,16 @@ export default function ProfileScreen() {
         )}
 
       </ScrollView>
+
+      {/* Avatar Menu */}
+      <AvatarMenu
+        visible={showAvatarMenu}
+        onClose={() => setShowAvatarMenu(false)}
+        onChangeAvatar={handleChangeAvatar}
+        onRemoveAvatar={handleRemoveAvatar}
+        hasAvatar={!!user?.avatarUrl}
+        anchorRef={avatarRef}
+      />
     </View>
   );
 }
@@ -487,14 +602,18 @@ const styles = StyleSheet.create({
     padding: 8,
     marginLeft: 8,
   },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 16,
+  },
   avatar: {
     width: 72,
     height: 72,
     borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
     overflow: 'hidden',
+    position: 'relative',
   },
   avatarImage: {
     width: '100%',
@@ -507,6 +626,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 28,
     fontWeight: 'bold',
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarEditIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    zIndex: 10,
   },
   infoContainer: {
     flex: 1,

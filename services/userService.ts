@@ -1,6 +1,6 @@
 import { apiCall, ApiResponse } from './api';
 import { User, CURRENT_USER_ID } from '../data/mockData';
-import { supabase, dbUserToUser } from './supabase';
+import { supabase, dbUserToUser, uploadAvatar, deleteAvatar, uriToBlob } from './supabase';
 
 export interface UserStats {
   totalPoints: number;
@@ -253,6 +253,95 @@ export const userService = {
       // This function is called when a challenge is completed, but the actual points
       // are stored in the users_challenge table, not in the users table
       return this.getUser(userId);
+    });
+  },
+
+  // Update avatar (upload new avatar image)
+  updateAvatar: async (userId: string, avatarUri: string): Promise<ApiResponse<User>> => {
+    return apiCall(async () => {
+      // Upload avatar to storage
+      const blob = await uriToBlob(avatarUri);
+      const avatarUrl = await uploadAvatar(blob, userId);
+
+      // Update user profile with new avatar URL
+      const { data, error } = await supabase
+        .from('users')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', userId)
+        .select('id, username, avatar_url, created_at')
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('User not found');
+      
+      // Get calculated points and challenges_completed
+      const { data: userChallenges, error: ucError } = await supabase
+        .from('users_challenge')
+        .select('challenge_id, points')
+        .eq('user_id', userId);
+
+      if (ucError) throw ucError;
+
+      const points = (userChallenges || []).reduce((sum, uc) => {
+        return sum + (uc.points || 0);
+      }, 0);
+      const challengesCompleted = userChallenges?.length || 0;
+
+      return dbUserToUser({
+        ...data,
+        points,
+        challenges_completed: challengesCompleted,
+      } as any);
+    });
+  },
+
+  // Delete avatar (remove avatar image from storage and set avatar_url to null)
+  removeAvatar: async (userId: string): Promise<ApiResponse<User>> => {
+    return apiCall(async () => {
+      // Get current user to find avatar URL
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('avatar_url')
+        .eq('id', userId)
+        .single();
+
+      if (userError) throw userError;
+      if (!userData) throw new Error('User not found');
+
+      // Delete avatar from storage
+      if (userData.avatar_url) {
+        await deleteAvatar(userId, userData.avatar_url);
+      }
+
+      // Update user profile to remove avatar URL
+      const { data, error } = await supabase
+        .from('users')
+        .update({ avatar_url: null })
+        .eq('id', userId)
+        .select('id, username, avatar_url, created_at')
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('User not found');
+      
+      // Get calculated points and challenges_completed
+      const { data: userChallenges, error: ucError } = await supabase
+        .from('users_challenge')
+        .select('challenge_id, points')
+        .eq('user_id', userId);
+
+      if (ucError) throw ucError;
+
+      const points = (userChallenges || []).reduce((sum, uc) => {
+        return sum + (uc.points || 0);
+      }, 0);
+      const challengesCompleted = userChallenges?.length || 0;
+
+      return dbUserToUser({
+        ...data,
+        points,
+        challenges_completed: challengesCompleted,
+      } as any);
     });
   },
 };
