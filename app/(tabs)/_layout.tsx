@@ -46,16 +46,12 @@ export default function TabsLayout() {
               borderTopWidth: 1,
               borderTopColor: '#e0e0e0',
               paddingBottom: Math.max(insets.bottom, 8),
-              paddingTop: 8,
               height: 60 + Math.max(insets.bottom - 8, 0),
             },
             tabBarShowLabel: !isSmallScreen,
             tabBarLabelStyle: {
               fontSize: 10,
               fontWeight: '500',
-            },
-            tabBarIconStyle: {
-              marginTop: 4,
             },
             // Hide header on desktop/tablet (we have sidebar logo)
             headerShown: !showSidebar,
@@ -90,9 +86,7 @@ export default function TabsLayout() {
               tabBarIcon: () => (
                 <Ionicons name="camera" size={28} color="#fff" />
               ),
-              tabBarIconStyle: {
-                marginTop: 0,
-              },
+
               tabBarButton: (props) => (
                 <Pressable
                   {...props}
@@ -104,6 +98,7 @@ export default function TabsLayout() {
                     backgroundColor: '#000',
                     borderWidth: 4,
                     borderColor: '#fff',
+                    alignSelf: 'center',
                     ...(Platform.OS === 'web' ? {
                       boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
                     } : {
@@ -146,7 +141,7 @@ export default function TabsLayout() {
                 return (
                   <Pressable
                     style={{ marginRight: 16, padding: 4 }}
-                    onPress={handleLogout}
+                    onPress={hndleLogout}
                   >
                     <Ionicons name="log-out-outline" size={24} color="#fff" />
                   </Pressable>

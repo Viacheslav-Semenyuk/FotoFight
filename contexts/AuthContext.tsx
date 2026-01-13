@@ -21,11 +21,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Get initial session
     const initSession = async () => {
-      const currentSession = await authService.getSession();
-      const currentUser = await authService.getCurrentUser();
-      setSession(currentSession);
-      setUser(currentUser);
-      setLoading(false);
+      try {
+        const currentSession = await authService.getSession();
+        setSession(currentSession);
+        
+        // Only get user if session exists
+        if (currentSession) {
+          const currentUser = await authService.getCurrentUser();
+          setUser(currentUser);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Error initializing session:', error);
+        setSession(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
     initSession();
@@ -35,8 +48,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (event, session) => {
         setSession(session);
         if (session) {
-          const currentUser = await authService.getCurrentUser();
-          setUser(currentUser);
+          try {
+            const currentUser = await authService.getCurrentUser();
+            setUser(currentUser);
+          } catch (error) {
+            console.error('Error getting user on auth state change:', error);
+            setUser(null);
+          }
         } else {
           setUser(null);
         }

@@ -92,6 +92,12 @@ export const userService = {
   // Uses Supabase Auth to get the current user ID
   getCurrentUser: async (): Promise<ApiResponse<User>> => {
     return apiCall(async () => {
+      // First check if there's an active session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error('User not authenticated');
+      }
+
       // Get current authenticated user
       const { data: authData, error: authError } = await supabase.auth.getUser();
       
