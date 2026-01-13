@@ -41,8 +41,8 @@ CREATE TABLE users (
 CREATE TABLE challenges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
-  description TEXT NOT NULL,
   points INTEGER NOT NULL CHECK (points >= 1 AND points <= 9),
+  category TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -109,33 +109,8 @@ CREATE POLICY "Allow delete own posts" ON users_challenge FOR DELETE
 -- =============================================
 -- Seed data: Challenges (челленджи)
 -- =============================================
-
-INSERT INTO challenges (title, description, points) VALUES
-  ('Snap something blue', 'Find and photograph something blue', 1),
-  ('Snap a cup', 'Photograph any cup or mug', 1),
-  ('Snap food', 'Take a photo of your meal', 2),
-  ('Snap a smile', 'Capture someone smiling', 3),
-  ('Snap nature', 'Photograph something from nature', 4),
-  ('Snap architecture', 'Photograph a building or structure', 5),
-  ('Snap a sunset', 'Capture the sunset', 6),
-  ('Snap graffiti', 'Find and photograph street art', 7),
-  ('Snap a reflection in water', 'Capture a reflection in water', 8),
-  ('Snap lightning', 'Photograph lightning (good luck!)', 9),
-  ('Snap a pet', 'Photograph any pet or animal', 2),
-  ('Snap flowers', 'Capture beautiful flowers', 3),
-  ('Snap the sky', 'Photograph the sky', 1),
-  ('Snap water', 'Capture water in any form', 4),
-  ('Snap a book', 'Photograph a book', 2),
-  ('Snap shoes', 'Take a photo of shoes', 1),
-  ('Snap a door', 'Photograph an interesting door', 3),
-  ('Snap stairs', 'Capture stairs or steps', 4),
-  ('Snap a window', 'Photograph a window', 2),
-  ('Snap a shadow', 'Capture an interesting shadow', 5),
-  ('Snap a tree', 'Photograph a tree', 3),
-  ('Snap a car', 'Capture a car or vehicle', 2),
-  ('Snap a sign', 'Photograph a sign', 1),
-  ('Snap a pattern', 'Find and photograph a pattern', 4)
-ON CONFLICT DO NOTHING;
+-- Seed данные для challenges находятся в отдельном файле: challenges-seed.sql
+-- Запустите challenges-seed.sql ПОСЛЕ выполнения supabase-schema.sql
 
 -- =============================================
 -- View для feed (все посты, отсортированные по created_at)
@@ -152,8 +127,7 @@ SELECT
   u.username,
   u.avatar_url,
   c.id AS challenge_id,
-  c.title AS challenge_title,
-  c.description AS challenge_description
+  c.title AS challenge_title
 FROM users_challenge uc
 JOIN users u ON uc.user_id = u.id
 JOIN challenges c ON uc.challenge_id = c.id

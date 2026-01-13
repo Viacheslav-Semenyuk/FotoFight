@@ -120,7 +120,6 @@ export interface DbUser {
 export interface DbChallenge {
   id: string;
   title: string;
-  description: string;
   points: number;
   created_at: string;
 }
@@ -359,7 +358,6 @@ export function dbChallengeToChallenge(dbChallenge: DbChallenge): Challenge {
   return {
     id: dbChallenge.id,
     title: dbChallenge.title,
-    description: dbChallenge.description,
     points: dbChallenge.points,
     completed: false, // Will be set based on user context
     completedBy: [], // Will be fetched separately
@@ -411,14 +409,14 @@ export function dbUsersChallengeToPhoto(dbPost: DbUsersChallenge, username: stri
   };
 }
 
-export function dbUsersChallengeToPost(dbPost: DbUsersChallenge, username: string, avatarUrl: string | undefined, challengeDescription: string, challengePoints: number): Post {
+export function dbUsersChallengeToPost(dbPost: DbUsersChallenge, username: string, avatarUrl: string | undefined, challengeTitle: string, challengePoints: number): Post {
   return {
     id: dbPost.id,
     username,
     userId: dbPost.user_id,
     avatarUrl,
     challengeId: dbPost.challenge_id,
-    challengeDescription,
+    challengeDescription: challengeTitle, // Using title as description
     challengePoints: dbPost.points,
     photoUri: dbPost.photo_uri,
     timestamp: new Date(dbPost.created_at).getTime(),

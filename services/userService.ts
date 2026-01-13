@@ -114,8 +114,14 @@ export const userService = {
         .eq('id', userId)
         .single();
 
-      if (userError) throw userError;
-      if (!userData) throw new Error('User profile not found');
+      if (userError) {
+        // Check if error is PGRST116 (profile not found)
+        if ((userError as any).code === 'PGRST116') {
+          throw new Error('USER_PROFILE_NOT_FOUND');
+        }
+        throw userError;
+      }
+      if (!userData) throw new Error('USER_PROFILE_NOT_FOUND');
 
       // Get completed challenges with their points
       const { data: userChallenges, error: ucError } = await supabase

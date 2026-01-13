@@ -328,9 +328,6 @@ export default function CameraScreen() {
             {item.title}
             {isSelected && ' ✓'}
           </Text>
-          {item.description ? (
-            <Text style={styles.dropdownItemDescription} numberOfLines={2}>{item.description}</Text>
-          ) : null}
         </View>
         <Text style={[
           styles.dropdownItemPoints,
@@ -389,9 +386,20 @@ export default function CameraScreen() {
 
     try {
       // Send photo to AI for verification
-      const verifyResult = await photoService.verifyPhotoWithAI(capturedPhoto, selectedChallenge.title);
+      const verifyResult = await photoService.verifyPhotoWithAI(
+        capturedPhoto, 
+        selectedChallenge.title
+      );
 
-      if (verifyResult.success && verifyResult.data?.verified) {
+      // Debug logging
+      console.log('Verification result in camera:', {
+        success: verifyResult.success,
+        data: verifyResult.data,
+        verified: verifyResult.data?.verified,
+        message: verifyResult.data?.message,
+      });
+
+      if (verifyResult.success && verifyResult.data?.verified === true) {
         // Photo verified - submit photo and complete challenge
         const submitResult = await photoService.submitPhoto({
           photoUri: capturedPhoto,
@@ -422,8 +430,11 @@ export default function CameraScreen() {
           setTimeout(() => setNotification(null), 3000);
         }
       } else {
-        // Verification failed
-        setNotification({ type: 'error', message: verifyResult.data?.message || 'Photo verification failed.' });
+        // Verification failed or error occurred
+        const errorMessage = verifyResult.data?.message 
+          || verifyResult.error 
+          || 'Photo verification failed.';
+        setNotification({ type: 'error', message: errorMessage });
         
         // Hide notification after 3 seconds
         setTimeout(() => setNotification(null), 3000);
@@ -501,20 +512,34 @@ export default function CameraScreen() {
                 </Pressable>
 
                 {showChallengeDropdown && (
-                  <View style={styles.dropdown} data-dropdown="true">
+                  <View 
+                    style={styles.dropdown} 
+                    data-dropdown="true" 
+                    collapsable={false}
+                    onStartShouldSetResponder={() => false}
+                    onMoveShouldSetResponder={() => false}
+                  >
                     {dropdownChallenges.length === 0 ? (
                       <View style={styles.dropdownItem}>
                         <Text style={styles.dropdownItemTitle}>No challenges available</Text>
                       </View>
                     ) : (
-                      <FlatList
-                        data={dropdownChallenges}
-                        renderItem={renderDropdownItem}
-                        keyExtractor={(item) => item.id}
-                        style={styles.dropdownScroll}
-                        nestedScrollEnabled={true}
-                        scrollEnabled={true}
-                      />
+                      <View style={Platform.OS === 'android' ? styles.dropdownListContainer : undefined}>
+                        <FlatList
+                          data={dropdownChallenges}
+                          renderItem={renderDropdownItem}
+                          keyExtractor={(item) => item.id}
+                          style={styles.dropdownScroll}
+                          nestedScrollEnabled={true}
+                          scrollEnabled={true}
+                          removeClippedSubviews={false}
+                          keyboardShouldPersistTaps="handled"
+                          showsVerticalScrollIndicator={true}
+                          bounces={true}
+                          onStartShouldSetResponder={() => true}
+                          onMoveShouldSetResponder={() => true}
+                        />
+                      </View>
                     )}
                   </View>
                 )}
@@ -1042,8 +1067,19 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     minHeight: 50,
   },
+  dropdownListContainer: {
+    flex: 1,
+    ...(Platform.OS === 'android' && {
+      // Ensure touch events work properly on Android
+      pointerEvents: 'auto',
+    }),
+  },
   dropdownScroll: {
     maxHeight: 200,
+    ...(Platform.OS === 'android' && {
+      // Ensure scroll works on Android
+      flexGrow: 0,
+    }),
   },
   dropdownItem: {
     padding: 12,

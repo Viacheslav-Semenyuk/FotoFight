@@ -3,6 +3,9 @@ import { Photo, Post } from '../data/mockData';
 import { supabase, uploadPhoto, uriToBlob, dbUsersChallengeToPhoto, dbUsersChallengeToPost } from './supabase';
 import { userService } from './userService';
 import { challengeService } from './challengeService';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { EncodingType } from 'expo-file-system';
 
 export interface VerificationResult {
   success: boolean;
@@ -25,7 +28,7 @@ export const photoService = {
       // Join with users and challenges tables
       const { data, error } = await supabase
         .from('users_challenge')
-        .select('*, users!inner(username, avatar_url), challenges!inner(title, description, points)')
+        .select('*, users!inner(username, avatar_url), challenges!inner(title, points)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -42,7 +45,7 @@ export const photoService = {
         },
         p.users.username,
         p.users.avatar_url || undefined,
-        p.challenges.description,
+        p.challenges.title,
         p.challenges.points
       ));
     });
@@ -132,25 +135,92 @@ export const photoService = {
     });
   },
 
-  // Verify photo with AI (mock)
+  // Convert photo URI to base64
+  uriToBase64: async (uri: string): Promise<string> => {
+    // If it's already a base64 data URI, return it
+    if (uri.startsWith('data:')) {
+      return uri;
+    }
+
+    // If it's a web URL (http/https), fetch and convert
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    // For local file URIs (file://), read as base64
+    try {
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: EncodingType.Base64,
+      });
+      // Determine MIME type from file extension or default to jpeg
+      const mimeType = uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+      return `data:${mimeType};base64,${base64}`;
+    } catch (error) {
+      throw new Error(`Failed to convert photo to base64: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
+  // Verify photo with AI using Supabase Edge Function
   verifyPhotoWithAI: async (photoUri: string, challengeTitle: string): Promise<ApiResponse<VerificationResult>> => {
-    // Simulate longer delay for AI processing
-    await simulateNetworkDelay();
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-    
-    // 90% success rate for demo
-    const isValid = Math.random() > 0.1;
-    
-    return {
-      success: true,
-      data: {
-        success: isValid,
-        message: isValid 
+    return apiCall(async () => {
+      // Convert photo to base64
+      const photoBase64 = await photoService.uriToBase64(photoUri);
+
+      // Get current authenticated user for authorization
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !authData.user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Call Supabase Edge Function
+      // Supabase SDK автоматически добавляет токен авторизации
+      const { data, error } = await supabase.functions.invoke('verify-photo', {
+        body: {
+          photoBase64,
+          challengeTitle,
+        },
+      });
+
+      // Логирование для отладки
+      console.log('Edge Function response:', { data, error });
+
+      if (error) {
+        console.error('Edge Function error:', error);
+        throw new Error(`Failed to verify photo: ${error.message || JSON.stringify(error)}`);
+      }
+
+      if (!data) {
+        console.error('No data returned from Edge Function');
+        throw new Error('No response from verification service');
+      }
+
+      if (!data.success) {
+        console.error('Verification failed:', data.error, data.details);
+        throw new Error(data?.error || 'Verification failed');
+      }
+
+      // Ensure verified is a boolean (handle case where it might be string or undefined)
+      const verified = data.verified === true || data.verified === 'true';
+      
+      console.log('Verification result:', { verified, rawVerified: data.verified, rawResponse: data.rawResponse });
+
+      // Return VerificationResult directly (apiCall will wrap it in ApiResponse)
+      return {
+        success: verified,
+        message: data.message || (verified 
           ? `Photo verified! It matches the challenge "${challengeTitle}"`
-          : `Photo doesn't seem to match the challenge. Please try again.`,
-        verified: isValid,
-      },
-    };
+          : `Photo doesn't seem to match the challenge. Please try again.`),
+        verified: verified,
+      };
+    });
   },
 
   // Submit a photo for a challenge

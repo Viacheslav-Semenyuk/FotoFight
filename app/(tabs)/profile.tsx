@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { userService, photoService, User, Photo } from '../../services';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 import { useAuth } from '../../contexts/AuthContext';
@@ -62,6 +63,19 @@ export default function ProfileScreen() {
         const userResponse = await userService.getCurrentUser();
         if (userResponse.success && userResponse.data) {
           setUser(userResponse.data);
+        } else {
+          // If user profile doesn't exist, sign out
+          const errorMessage = userResponse.error || '';
+          if (errorMessage === 'USER_PROFILE_NOT_FOUND' || 
+              errorMessage.includes('PGRST116') || 
+              errorMessage.includes('User profile not found') ||
+              errorMessage.includes('0 rows') ||
+              errorMessage.includes('Cannot coerce') ||
+              errorMessage.includes('result contains 0 rows')) {
+            await signOut();
+            setIsLoading(false);
+            return;
+          }
         }
         
         // Load user's photos
@@ -79,7 +93,7 @@ export default function ProfileScreen() {
       };
       
       loadData();
-    }, [authUser])
+    }, [authUser, signOut])
   );
 
   const formatTime = (timestamp: number) => {
@@ -124,11 +138,49 @@ export default function ProfileScreen() {
       setIsUpdatingAvatar(true);
       try {
         const asset = result.assets[0];
-        const response = await userService.updateAvatar(authUser.id, asset.uri);
+        let finalUri = asset.uri;
+
+        // On Android, always process the image to ensure crop is applied
+        // The allowsEditing option may not always apply the crop correctly
+        if (Platform.OS === 'android') {
+          // Check if cropRect exists (it may not be in types but could be in runtime)
+          const cropRect = (asset as any).cropRect;
+          
+          if (cropRect) {
+            // Apply the crop manually
+            const manipResult = await ImageManipulator.manipulateAsync(
+              asset.uri,
+              [
+                {
+                  crop: {
+                    originX: cropRect.x,
+                    originY: cropRect.y,
+                    width: cropRect.width,
+                    height: cropRect.height,
+                  },
+                },
+                { resize: { width: 400, height: 400 } },
+              ],
+              { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            finalUri = manipResult.uri;
+          } else {
+            // Even if no cropRect, resize to square to ensure consistent avatar size
+            // This also helps ensure the edited image is properly processed
+            const manipResult = await ImageManipulator.manipulateAsync(
+              asset.uri,
+              [{ resize: { width: 400, height: 400 } }],
+              { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            finalUri = manipResult.uri;
+          }
+        }
+
+        const response = await userService.updateAvatar(authUser.id, finalUri);
         
         if (response.success && response.data) {
           setUser(response.data);
-          Alert.alert('Success', 'Avatar updated successfully!');
+          // Success is indicated by the avatar update visually, no alert needed
         } else {
           Alert.alert('Error', response.error || 'Failed to update avatar');
         }

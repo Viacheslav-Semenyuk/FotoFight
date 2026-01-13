@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { photoService, Post } from '../../services';
 import { useAuth } from '../../contexts/AuthContext';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
@@ -148,6 +149,39 @@ export default function FeedScreen() {
     );
   }
 
+  // Empty state
+  if (posts.length === 0) {
+    return (
+      <View style={styles.container}>
+        {/* Custom Animated Header */}
+        {!centerContent && (
+          <Animated.View
+            style={[
+              styles.customHeader,
+              {
+                paddingTop: insets.top,
+                height: HEADER_HEIGHT + insets.top,
+                transform: [{ translateY: headerTranslateY }],
+              },
+            ]}
+          >
+            <Text style={styles.headerTitle}>Foto Fight</Text>
+          </Animated.View>
+        )}
+        
+        <View style={[
+          styles.emptyContainer,
+          centerContent && styles.emptyContainerDesktop,
+          !centerContent && { paddingTop: HEADER_HEIGHT + insets.top },
+        ]}>
+          <Ionicons name="images-outline" size={64} color="#ccc" />
+          <Text style={styles.emptyTitle}>Feed is empty</Text>
+          <Text style={styles.emptyText}>Be the first to post a photo!</Text>
+        </View>
+      </View>
+    );
+  }
+
   // Don't show custom header on desktop/tablet
   if (centerContent) {
     return (
@@ -210,6 +244,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    backgroundColor: '#fff',
+  },
+  emptyContainerDesktop: {
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#262626',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#8e8e8e',
+    textAlign: 'center',
   },
   customHeader: {
     position: 'absolute',

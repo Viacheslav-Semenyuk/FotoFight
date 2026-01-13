@@ -22,7 +22,6 @@ export interface Photo {
 export interface Challenge {
   id: string;
   title: string;
-  description: string;
   points: number;
   completed: boolean;
   completedBy?: string[]; // user IDs who completed this challenge
