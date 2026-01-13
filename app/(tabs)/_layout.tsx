@@ -141,7 +141,7 @@ export default function TabsLayout() {
                 return (
                   <Pressable
                     style={{ marginRight: 16, padding: 4 }}
-                    onPress={hndleLogout}
+                    onPress={handleLogout}
                   >
                     <Ionicons name="log-out-outline" size={24} color="#fff" />
                   </Pressable>

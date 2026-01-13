@@ -4,6 +4,7 @@
     "slug": "fotofight",
     "owner": "pickleants-organization",
     "version": "1.0.0",
+    "sdkVersion": "51.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -61,8 +62,7 @@
           }
         }
       ],
-      "expo-secure-store",
-      "expo-web-browser"
+      "expo-secure-store"
     ],
     "scheme": "foto-fight",
     "extra": {
