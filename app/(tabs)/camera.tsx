@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   Image,
   ScrollView,
+  FlatList,
   Platform,
   ActivityIndicator,
   PressableStateCallbackType,
@@ -292,6 +293,55 @@ export default function CameraScreen() {
     setShowChallengeDropdown(false);
   };
 
+  // Prepare dropdown data for FlatList
+  const dropdownChallenges = useMemo(() => {
+    const items: Challenge[] = [];
+    
+    // Add selected challenge first if it's not in uncompletedChallenges
+    if (selectedChallenge && !uncompletedChallenges.find(c => c.id === selectedChallenge.id)) {
+      items.push(selectedChallenge);
+    }
+    
+    // Add all uncompleted challenges
+    items.push(...uncompletedChallenges);
+    
+    return items;
+  }, [selectedChallenge, uncompletedChallenges]);
+
+  // Render item for FlatList
+  const renderDropdownItem = useCallback(({ item }: { item: Challenge }) => {
+    const isSelected = selectedChallenge?.id === item.id;
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.dropdownItem,
+          isSelected && styles.dropdownItemSelected,
+          pressed && styles.dropdownItemPressed
+        ]}
+        onPress={() => handleChallengeSelect(item)}
+      >
+        <View style={styles.dropdownItemContent}>
+          <Text style={[
+            styles.dropdownItemTitle,
+            isSelected && styles.dropdownItemTitleSelected
+          ]}>
+            {item.title}
+            {isSelected && ' ✓'}
+          </Text>
+          {item.description ? (
+            <Text style={styles.dropdownItemDescription} numberOfLines={2}>{item.description}</Text>
+          ) : null}
+        </View>
+        <Text style={[
+          styles.dropdownItemPoints,
+          isSelected && styles.dropdownItemPointsSelected
+        ]}>
+          {item.points} pts
+        </Text>
+      </Pressable>
+    );
+  }, [selectedChallenge, handleChallengeSelect]);
+
   // Close dropdown when clicking outside (for web)
   useEffect(() => {
     if (!showChallengeDropdown || Platform.OS !== 'web') return;
@@ -452,70 +502,19 @@ export default function CameraScreen() {
 
                 {showChallengeDropdown && (
                   <View style={styles.dropdown} data-dropdown="true">
-                    {uncompletedChallenges.length === 0 && !selectedChallenge ? (
+                    {dropdownChallenges.length === 0 ? (
                       <View style={styles.dropdownItem}>
                         <Text style={styles.dropdownItemTitle}>No challenges available</Text>
                       </View>
                     ) : (
-                      <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
-                        {/* Show selected challenge first if it's not in uncompletedChallenges */}
-                        {selectedChallenge && !uncompletedChallenges.find(c => c.id === selectedChallenge.id) && (
-                          <Pressable
-                            style={({ pressed }) => [
-                              styles.dropdownItem,
-                              styles.dropdownItemSelected,
-                              pressed && styles.dropdownItemPressed
-                            ]}
-                            onPress={() => handleChallengeSelect(selectedChallenge)}
-                          >
-                            <View style={styles.dropdownItemContent}>
-                              <Text style={styles.dropdownItemTitleSelected}>
-                                {selectedChallenge.title} ✓
-                              </Text>
-                              {selectedChallenge.description ? (
-                                <Text style={styles.dropdownItemDescription} numberOfLines={2}>{selectedChallenge.description}</Text>
-                              ) : null}
-                            </View>
-                            <Text style={styles.dropdownItemPointsSelected}>
-                              {selectedChallenge.points} pts
-                            </Text>
-                          </Pressable>
-                        )}
-                        {/* Show all uncompleted challenges */}
-                        {uncompletedChallenges.map((item) => {
-                          const isSelected = selectedChallenge?.id === item.id;
-                          return (
-                            <Pressable
-                              key={item.id}
-                              style={({ pressed }) => [
-                                styles.dropdownItem,
-                                isSelected && styles.dropdownItemSelected,
-                                pressed && styles.dropdownItemPressed
-                              ]}
-                              onPress={() => handleChallengeSelect(item)}
-                            >
-                              <View style={styles.dropdownItemContent}>
-                                <Text style={[
-                                  styles.dropdownItemTitle,
-                                  isSelected && styles.dropdownItemTitleSelected
-                                ]}>
-                                  {item.title}
-                                  {isSelected && ' ✓'}
-                                </Text>
-                                {item.description ? (
-                                  <Text style={styles.dropdownItemDescription} numberOfLines={2}>{item.description}</Text>
-                                ) : null}
-                              </View>
-                              <Text style={[
-                                styles.dropdownItemPoints,
-                                isSelected && styles.dropdownItemPointsSelected
-                              ]}>
-                                {item.points} pts
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
+                      <FlatList
+                        data={dropdownChallenges}
+                        renderItem={renderDropdownItem}
+                        keyExtractor={(item) => item.id}
+                        style={styles.dropdownScroll}
+                        nestedScrollEnabled={true}
+                        scrollEnabled={true}
+                      />
                     )}
                   </View>
                 )}

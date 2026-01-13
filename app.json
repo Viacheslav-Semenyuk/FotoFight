@@ -61,7 +61,8 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "scheme": "foto-fight",
     "extra": {

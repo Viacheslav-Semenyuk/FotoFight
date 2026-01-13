@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { EncodingType } from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 import { User, Challenge, Photo, Post } from '../data/mockData';
 
 const supabaseUrl = 'https://vfpufhvjieelesndblhj.supabase.co';
@@ -130,24 +133,28 @@ export interface DbUsersChallenge {
 
 /**
  * Upload photo to Supabase Storage
- * @param file - File or Blob to upload
+ * @param file - File, Blob, or ArrayBuffer to upload (ArrayBuffer required on Android)
  * @param userId - User ID
  * @param challengeId - Challenge ID
  * @returns Public URL of uploaded photo
  */
 export async function uploadPhoto(
-  file: Blob | File,
+  file: Blob | File | ArrayBuffer,
   userId: string,
   challengeId: string
 ): Promise<string> {
   const fileExt = file instanceof File ? file.name.split('.').pop() : 'jpg';
   const fileName = `${userId}/${Date.now()}_${challengeId}.${fileExt}`;
 
+  // Determine content type
+  const contentType = file instanceof File ? file.type : 'image/jpeg';
+
   const { data, error } = await supabase.storage
     .from(PHOTOS_BUCKET)
     .upload(fileName, file, {
       cacheControl: '3600',
       upsert: false,
+      contentType: contentType,
     });
 
   if (error) {
@@ -163,9 +170,17 @@ export async function uploadPhoto(
 }
 
 /**
- * Convert base64 or local URI to Blob for upload
+ * Convert base64 or local URI to Blob or ArrayBuffer for upload
+ * On Android, returns ArrayBuffer (required by Supabase Storage)
+ * On other platforms, returns Blob
  */
-export async function uriToBlob(uri: string): Promise<Blob> {
+export async function uriToBlob(uri: string): Promise<Blob | ArrayBuffer> {
+  // On Android, Supabase Storage requires ArrayBuffer instead of Blob
+  if (Platform.OS === 'android') {
+    return uriToArrayBuffer(uri);
+  }
+
+  // For web and iOS, use Blob
   // If it's already a URL (http/https), fetch it
   if (uri.startsWith('http://') || uri.startsWith('https://')) {
     const response = await fetch(uri);
@@ -178,12 +193,31 @@ export async function uriToBlob(uri: string): Promise<Blob> {
     return await response.blob();
   }
 
-  // For React Native local file URIs (file://)
-  // In React Native, we need to use a different approach
-  // For now, we'll assume it's a base64 or needs to be converted
-  // In production, you might need react-native-fs or similar
+  // For React Native local file URIs (file://) on iOS
   const response = await fetch(uri);
   return await response.blob();
+}
+
+/**
+ * Convert URI to ArrayBuffer (for Android)
+ */
+async function uriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
+  // If it's a base64 data URI
+  if (uri.startsWith('data:')) {
+    const base64Data = uri.split(',')[1];
+    return decode(base64Data);
+  }
+
+  // For file:// URIs on Android, read file as base64 using expo-file-system
+  // then convert to ArrayBuffer
+  try {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: EncodingType.Base64,
+    });
+    return decode(base64);
+  } catch (error) {
+    throw new Error(`Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 // =============================================
