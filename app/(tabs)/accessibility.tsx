@@ -5,10 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  Pressable,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 
 export default function AccessibilityScreen() {
+  const router = useRouter();
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
 
@@ -29,7 +33,12 @@ export default function AccessibilityScreen() {
             centerContent && { maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center', width: '100%' },
           ]}
         >
-          <Text style={styles.title}>Accessibility Statement</Text>
+          <View style={styles.header}>
+            <Pressable style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color="#262626" />
+            </Pressable>
+            <Text style={styles.title}>Accessibility Statement</Text>
+          </View>
           <Text style={styles.text}>
             Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </Text>
@@ -89,6 +98,8 @@ export default function AccessibilityScreen() {
             Accessibility of Foto Fight relies on the following technologies to work with the particular combination of web browser and any assistive technologies or plug-ins installed on your device:
           </Text>
           <Text style={styles.paragraph}>
+            • React Native (mobile application framework){'\n'}
+            • React Native Web (web platform implementation){'\n'}
             • HTML{'\n'}
             • WAI-ARIA{'\n'}
             • CSS{'\n'}
@@ -153,11 +164,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  backButton: {
+    padding: 4,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#262626',
-    marginBottom: 8,
+    flex: 1,
   },
   subtitle: {
     fontSize: 18,

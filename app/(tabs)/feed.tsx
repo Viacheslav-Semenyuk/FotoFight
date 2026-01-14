@@ -237,11 +237,11 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#fafafa',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#fafafa',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
-    backgroundColor: '#fff',
+    backgroundColor: '#fafafa',
   },
   emptyContainerDesktop: {
     maxWidth: CONTENT_MAX_WIDTH,

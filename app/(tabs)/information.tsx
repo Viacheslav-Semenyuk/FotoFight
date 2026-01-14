@@ -33,7 +33,12 @@ export default function InformationScreen() {
             centerContent && { maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center', width: '100%' },
           ]}
         >
-          <Text style={styles.title}>Information</Text>
+          <View style={styles.header}>
+            <Pressable style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color="#262626" />
+            </Pressable>
+            <Text style={styles.title}>Information</Text>
+          </View>
 
           {/* Privacy Policy Button */}
           <Pressable style={styles.settingItem} onPress={() => router.push('/(tabs)/privacy-policy')}>
@@ -99,13 +104,22 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginHorizontal: 16,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    gap: 8,
+  },
+  backButton: {
+    padding: 4,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#262626',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    flex: 1,
   },
   settingItem: {
     flexDirection: 'row',

@@ -110,13 +110,13 @@ export default function LeaderboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#fafafa',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#fafafa',
   },
   flatList: {
     width: '100%',
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   currentUserItem: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
   },
   rank: {
     width: 24,

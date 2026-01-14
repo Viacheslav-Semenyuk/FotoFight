@@ -113,8 +113,8 @@ CREATE POLICY "Allow delete own posts" ON users_challenge FOR DELETE
 -- =============================================
 -- Seed data: Challenges (челленджи)
 -- =============================================
--- Seed данные для challenges находятся в отдельном файле: challenges-seed.sql
--- Запустите challenges-seed.sql ПОСЛЕ выполнения supabase-schema.sql
+-- Seed данные для challenges находятся в отдельном файле: supabase-challenges-seed.sql
+-- Запустите supabase-challenges-seed.sql ПОСЛЕ выполнения supabase-schema.sql
 
 -- =============================================
 -- View для feed (все посты, отсортированные по created_at)

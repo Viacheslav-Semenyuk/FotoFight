@@ -5,10 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  Pressable,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 
 export default function TermsOfUseScreen() {
+  const router = useRouter();
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
 
@@ -29,7 +33,12 @@ export default function TermsOfUseScreen() {
             centerContent && { maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center', width: '100%' },
           ]}
         >
-          <Text style={styles.title}>Terms of Service</Text>
+          <View style={styles.header}>
+            <Pressable style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color="#262626" />
+            </Pressable>
+            <Text style={styles.title}>Terms of Service</Text>
+          </View>
           <Text style={styles.text}>
             Effective Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </Text>
@@ -104,7 +113,7 @@ export default function TermsOfUseScreen() {
           </Text>
           <Text style={styles.subtitle}>8. Intellectual Property</Text>
           <Text style={styles.paragraph}>
-            WE RESPECT AND SUPPORT THE INTELLECTUAL PROPERTY RIGHTS OF ARTISTS AND CREATORS. ANY ARTWORK, IMAGES, OR CREATIVE CONTENT SUBMITTED, SHOWCASED, OR UPLOADED THROUGH FOTO FIGHT REMAINS THE SOLE PROPERTY OF THE ORIGINAL ARTIST OR CREATOR. WE DO NOT CLAIM OWNERSHIP OVER THE RIGHTS TO ANY USER-SUBMITTED OR USER-GENERATED CONTENT.
+            WE RESPECT AND SUPPORT THE INTELLECTUAL PROPERTY RIGHTS OF USERS. ANY PHOTOS, IMAGES, OR OTHER CONTENT SUBMITTED, SHOWCASED, OR UPLOADED THROUGH FOTO FIGHT REMAINS THE SOLE PROPERTY OF THE USER WHO CREATED OR UPLOADED SUCH CONTENT. WE DO NOT CLAIM OWNERSHIP OVER THE RIGHTS TO ANY USER-SUBMITTED OR USER-GENERATED CONTENT.
           </Text>
           <Text style={styles.paragraph}>
             All other content and materials on Foto Fight, excluding user-submitted content, are protected by copyright. Your access to this content is limited to a non-exclusive, non-transferable license for personal, non-commercial use, as permitted under these Terms.
@@ -203,11 +212,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  backButton: {
+    padding: 4,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#262626',
-    marginBottom: 8,
+    flex: 1,
   },
   subtitle: {
     fontSize: 18,
