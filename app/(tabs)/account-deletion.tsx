@@ -65,7 +65,7 @@ export default function AccountDeletionScreen() {
           ]}
         >
           <View style={styles.header}>
-            <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <Pressable style={styles.backButton} onPress={() => router.push('/(tabs)/information')}>
               <Ionicons name="chevron-back" size={24} color="#262626" />
             </Pressable>
             <Text style={styles.title}>Account & Data Deletion</Text>
