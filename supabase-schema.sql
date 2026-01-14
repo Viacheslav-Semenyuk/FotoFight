@@ -98,6 +98,10 @@ CREATE POLICY "Allow insert own profile" ON users FOR INSERT
 CREATE POLICY "Allow update own profile" ON users FOR UPDATE 
   USING (auth.uid() = id);
 
+-- Пользователи могут удалять свой профиль
+CREATE POLICY "Allow delete own profile" ON users FOR DELETE 
+  USING (auth.uid() = id);
+
 -- Пользователи могут создавать посты только для себя
 CREATE POLICY "Allow insert own posts" ON users_challenge FOR INSERT 
   WITH CHECK (auth.uid() = user_id);

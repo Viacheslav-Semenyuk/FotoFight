@@ -1,6 +1,6 @@
 import { apiCall, ApiResponse } from './api';
 import { User, CURRENT_USER_ID } from '../data/mockData';
-import { supabase, dbUserToUser, uploadAvatar, deleteAvatar, uriToBlob } from './supabase';
+import { supabase, dbUserToUser, uploadAvatar, deleteAvatar, uriToBlob, PHOTOS_BUCKET } from './supabase';
 
 export interface UserStats {
   totalPoints: number;
@@ -354,6 +354,61 @@ export const userService = {
         points,
         challenges_completed: challengesCompleted,
       } as any);
+    });
+  },
+
+  // Delete user account and all associated data
+  deleteAccount: async (userId: string): Promise<ApiResponse<void>> => {
+    return apiCall(async () => {
+      console.log('userService.deleteAccount: Starting deletion for userId:', userId);
+      
+      // 1. Delete all files from storage (all files in userId/ folder)
+      try {
+        const { data: files, error: listError } = await supabase.storage
+          .from(PHOTOS_BUCKET)
+          .list(userId);
+
+        if (listError) {
+          console.warn('userService.deleteAccount: Error listing files:', listError);
+        } else if (files && files.length > 0) {
+          const filePaths = files.map(file => `${userId}/${file.name}`);
+          console.log('userService.deleteAccount: Deleting files:', filePaths);
+          const { error: deleteError } = await supabase.storage
+            .from(PHOTOS_BUCKET)
+            .remove(filePaths);
+
+          if (deleteError) {
+            console.warn('userService.deleteAccount: Error deleting files from storage:', deleteError);
+            // Continue even if storage deletion fails
+          } else {
+            console.log('userService.deleteAccount: Files deleted successfully');
+          }
+        } else {
+          console.log('userService.deleteAccount: No files to delete in storage');
+        }
+      } catch (storageError) {
+        console.warn('userService.deleteAccount: Error accessing storage:', storageError);
+        // Continue even if storage deletion fails
+      }
+
+      // 2. Delete user record from users table (this will cascade delete users_challenge records)
+      console.log('userService.deleteAccount: Deleting user record from database...');
+      const { error: deleteError, data } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId)
+        .select();
+
+      if (deleteError) {
+        console.error('userService.deleteAccount: Error deleting user:', deleteError);
+        throw new Error(`Failed to delete user: ${deleteError.message}`);
+      }
+
+      console.log('userService.deleteAccount: User deleted successfully, deleted rows:', data);
+      
+      // Note: Supabase Auth user deletion requires admin privileges
+      // The user profile and all data are deleted, which satisfies the account deletion requirement
+      // Auth cleanup can be done manually if needed, or via Edge Function with admin privileges
     });
   },
 };

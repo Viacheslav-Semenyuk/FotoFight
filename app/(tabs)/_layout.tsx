@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, View, StyleSheet, Platform } from 'react-native';
@@ -11,10 +11,11 @@ export default function TabsLayout() {
   const { isDesktop, isTablet, width } = useResponsive();
   const showSidebar = isDesktop || isTablet;
   const isSmallScreen = width < 380;
-  const { signOut, user: authUser } = useAuth();
+  const { user: authUser } = useAuth();
+  const router = useRouter();
   
-  const handleLogout = async () => {
-    await signOut();
+  const handleSettingsPress = () => {
+    router.push('/(tabs)/settings');
   };
 
   return (
@@ -134,16 +135,16 @@ export default function TabsLayout() {
                 <Ionicons name="person" size={size} color={color} />
               ),
               headerRight: () => {
-                // Only show logout in mobile header if user is authenticated
+                // Only show settings in mobile header if user is authenticated
                 if (!authUser || showSidebar) {
                   return null;
                 }
                 return (
                   <Pressable
                     style={{ marginRight: 16, padding: 4 }}
-                    onPress={handleLogout}
+                    onPress={handleSettingsPress}
                   >
-                    <Ionicons name="log-out-outline" size={24} color="#fff" />
+                    <Ionicons name="settings-outline" size={24} color="#fff" />
                   </Pressable>
                 );
               },
@@ -154,6 +155,54 @@ export default function TabsLayout() {
             options={{
               title: 'User Profile',
               headerTitle: 'Profile',
+              href: null, // Hide from tab bar
+            }}
+          />
+          <Tabs.Screen
+            name="settings"
+            options={{
+              title: 'Settings',
+              headerTitle: 'Settings',
+              href: null, // Hide from tab bar
+            }}
+          />
+          <Tabs.Screen
+            name="information"
+            options={{
+              title: 'Information',
+              headerTitle: 'Information',
+              href: null, // Hide from tab bar
+            }}
+          />
+          <Tabs.Screen
+            name="privacy-policy"
+            options={{
+              title: 'Privacy Policy',
+              headerTitle: 'Privacy Policy',
+              href: null, // Hide from tab bar
+            }}
+          />
+          <Tabs.Screen
+            name="terms-of-use"
+            options={{
+              title: 'Terms of Use',
+              headerTitle: 'Terms of Use',
+              href: null, // Hide from tab bar
+            }}
+          />
+          <Tabs.Screen
+            name="accessibility"
+            options={{
+              title: 'Accessibility',
+              headerTitle: 'Accessibility Statement',
+              href: null, // Hide from tab bar
+            }}
+          />
+          <Tabs.Screen
+            name="account-deletion"
+            options={{
+              title: 'Account Deletion',
+              headerTitle: 'Account & Data Deletion',
               href: null, // Hide from tab bar
             }}
           />

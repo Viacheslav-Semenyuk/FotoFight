@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { authService } from '../services/authService';
+import { userService } from '../services/userService';
 
 interface AuthContextType {
   user: SupabaseUser | null;
@@ -9,6 +10,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signInWithApple: () => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -89,6 +91,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   };
 
+  const deleteAccount = async () => {
+    if (!user) {
+      return { success: false, error: 'No user logged in' };
+    }
+
+    try {
+      console.log('AuthContext: Starting account deletion for user:', user.id);
+      // Delete user account and all data
+      const response = await userService.deleteAccount(user.id);
+      console.log('AuthContext: userService.deleteAccount response:', response);
+      
+      if (!response.success || response.error) {
+        return { success: false, error: response.error || 'Failed to delete account' };
+      }
+
+      // Sign out the user after account deletion
+      console.log('AuthContext: Account deleted, signing out...');
+      await authService.signOut();
+      setUser(null);
+      setSession(null);
+
+      return { success: true };
+    } catch (error) {
+      console.error('AuthContext: Delete account error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete account',
+      };
+    }
+  };
+
   const value: AuthContextType = {
     user,
     session,
@@ -96,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle,
     signInWithApple,
     signOut,
+    deleteAccount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
