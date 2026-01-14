@@ -4,3 +4,4 @@ export { default as FeedImage } from './FeedImage';
 export { default as BottomSheet } from './BottomSheet';
 export { default as Popover } from './Popover';
 export { default as AvatarMenu } from './AvatarMenu';
+export { default as Avatar } from './Avatar';

@@ -20,6 +20,7 @@ import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 import { useAuth } from '../../contexts/AuthContext';
 import FeedImage from '../../components/FeedImage';
 import AvatarMenu from '../../components/AvatarMenu';
+import Avatar from '../../components/Avatar';
 import * as SecureStore from 'expo-secure-store';
 
 export default function ProfileScreen() {
@@ -368,19 +369,12 @@ export default function ProfileScreen() {
           >
             <View 
               ref={avatarRef}
-              style={[styles.avatar, !user.avatarUrl && styles.avatarWithText]}
             >
-              {user.avatarUrl ? (
-                <Image
-                  source={{ uri: user.avatarUrl }}
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text style={styles.avatarText}>
-                  {user.username.charAt(0).toUpperCase()}
-                </Text>
-              )}
+              <Avatar
+                avatarUrl={user.avatarUrl}
+                username={user.username}
+                size={72}
+              />
               {isUpdatingAvatar && (
                 <View style={styles.avatarOverlay}>
                   <ActivityIndicator color="#fff" />
@@ -488,19 +482,11 @@ export default function ProfileScreen() {
                 {/* Header */}
                 <View style={styles.feedPostHeader}>
                   <View style={styles.feedUserInfo}>
-                    <View style={[styles.feedAvatar, !user.avatarUrl && styles.feedAvatarWithText]}>
-                      {user.avatarUrl ? (
-                        <Image
-                          source={{ uri: user.avatarUrl }}
-                          style={styles.feedAvatarImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Text style={styles.feedAvatarText}>
-                          {user.username.charAt(0).toUpperCase()}
-                        </Text>
-                      )}
-                    </View>
+                    <Avatar
+                      avatarUrl={user.avatarUrl}
+                      username={user.username}
+                      size={24}
+                    />
                     <Text style={styles.feedUsername}>{user.username}</Text>
                   </View>
                   <Text style={styles.feedTimeAgo}>{formatTime(photo.timestamp)}</Text>
@@ -658,27 +644,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 16,
   },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarWithText: {
-    backgroundColor: '#000',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
   avatarOverlay: {
     position: 'absolute',
     top: 0,
@@ -804,27 +769,7 @@ const styles = StyleSheet.create({
   feedUserInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  feedAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 6,
-    overflow: 'hidden',
-  },
-  feedAvatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  feedAvatarWithText: {
-    backgroundColor: '#000',
-  },
-  feedAvatarText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 10,
+    gap: 6,
   },
   feedUsername: {
     fontSize: 12,

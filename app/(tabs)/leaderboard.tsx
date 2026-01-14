@@ -12,6 +12,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { userService, User } from '../../services';
 import { useAuth } from '../../contexts/AuthContext';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
+import Avatar from '../../components/Avatar';
 
 export default function LeaderboardScreen() {
   const router = useRouter();
@@ -54,19 +55,12 @@ export default function LeaderboardScreen() {
           style={styles.userPressable}
           onPress={() => handleUserPress(item.id)}
         >
-          <View style={[styles.avatar, !item.avatarUrl && styles.avatarWithText]}>
-            {item.avatarUrl ? (
-              <Image
-                source={{ uri: item.avatarUrl }}
-                style={styles.avatarImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {item.username.charAt(0).toUpperCase()}
-              </Text>
-            )}
-          </View>
+          <Avatar
+            avatarUrl={item.avatarUrl}
+            username={item.username}
+            size={36}
+            style={{ marginRight: 10 }}
+          />
           <View style={styles.userInfo}>
             <Text style={[styles.username, isCurrentUser && styles.currentUserName]}>
               {item.username}
@@ -155,27 +149,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     cursor: 'pointer',
   } as any,
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarWithText: {
-    backgroundColor: '#000',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
   userInfo: {
     flex: 1,
   },

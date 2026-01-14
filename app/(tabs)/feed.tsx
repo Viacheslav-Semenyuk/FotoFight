@@ -18,6 +18,7 @@ import { photoService, Post } from '../../services';
 import { useAuth } from '../../contexts/AuthContext';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 import FeedImage from '../../components/FeedImage';
+import Avatar from '../../components/Avatar';
 
 const HEADER_HEIGHT = 56;
 
@@ -111,19 +112,12 @@ export default function FeedScreen() {
             }
           }}
         >
-          <View style={[styles.avatar, !item.avatarUrl && styles.avatarWithText]}>
-            {item.avatarUrl ? (
-              <Image
-                source={{ uri: item.avatarUrl }}
-                style={styles.avatarImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {item.username.charAt(0).toUpperCase()}
-              </Text>
-            )}
-          </View>
+          <Avatar
+            avatarUrl={item.avatarUrl}
+            username={item.username}
+            size={24}
+            style={{ marginRight: 6 }}
+          />
           <Text style={styles.username}>{item.username}</Text>
         </Pressable>
         <Text style={styles.timeAgo}>{formatTime(item.timestamp)}</Text>
@@ -316,27 +310,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     cursor: 'pointer',
   } as any,
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 6,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarWithText: {
-    backgroundColor: '#000',
-  },
-  avatarText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 10,
-  },
   username: {
     fontSize: 12,
     fontWeight: '600',
