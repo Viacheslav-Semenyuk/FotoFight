@@ -1,6 +1,4 @@
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('path');
-const fs = require('fs');
 
 const config = getDefaultConfig(__dirname);
 
@@ -8,14 +6,12 @@ const config = getDefaultConfig(__dirname);
 config.resolver.assetExts.push('tflite');
 
 // Custom resolver to handle missing .tflite files gracefully
-const defaultResolver = config.resolver.resolveRequest;
-config.resolver.resolveRequest = (context, realModuleName, platform, moduleName) => {
+config.resolver.resolveRequest = (context, moduleName, platform) => {
   // Check if this is a .tflite file
-  if (realModuleName && typeof realModuleName === 'string' && realModuleName.includes('.tflite')) {
+  if (moduleName && typeof moduleName === 'string' && moduleName.includes('.tflite')) {
     try {
       // Try to resolve using default resolver
-      const result = defaultResolver(context, realModuleName, platform, moduleName);
-      return result;
+      return context.resolveRequest(context, moduleName, platform);
     } catch (error) {
       // If file doesn't exist, return empty module to allow build to continue
       // The error will be handled at runtime in localAIService.ts
@@ -25,7 +21,7 @@ config.resolver.resolveRequest = (context, realModuleName, platform, moduleName)
     }
   }
   // Use default resolver for everything else
-  return defaultResolver(context, realModuleName, platform, moduleName);
+  return context.resolveRequest(context, moduleName, platform);
 };
 
 module.exports = config;
