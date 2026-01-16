@@ -6,6 +6,7 @@ import { challengeService } from './challengeService';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { EncodingType } from 'expo-file-system';
+import { verifyPhotoLocally, isLocalAIAvailable } from './localAIService';
 
 export interface VerificationResult {
   success: boolean;
@@ -167,59 +168,34 @@ export const photoService = {
     }
   },
 
-  // Verify photo with AI using Supabase Edge Function
-  verifyPhotoWithAI: async (photoUri: string, challengeTitle: string): Promise<ApiResponse<VerificationResult>> => {
+  // Verify photo with AI - uses ONLY local AI (no server fallback)
+  // challengeData should contain detectable_object from database
+  verifyPhotoWithAI: async (
+    photoUri: string, 
+    challengeTitle: string,
+    challengeData?: { detectable_object?: string | null }
+  ): Promise<ApiResponse<VerificationResult>> => {
     return apiCall(async () => {
-      // Convert photo to base64
-      const photoBase64 = await photoService.uriToBase64(photoUri);
-
-      // Get current authenticated user for authorization
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !authData.user) {
-        throw new Error('User not authenticated');
+      // Use local AI verification (Android only)
+      if (!isLocalAIAvailable()) {
+        throw new Error('Local AI verification is only available on Android. Please use an Android device.');
       }
 
-      // Call Supabase Edge Function
-      // Supabase SDK автоматически добавляет токен авторизации
-      const { data, error } = await supabase.functions.invoke('verify-photo', {
-        body: {
-          photoBase64,
-          challengeTitle,
-        },
-      });
-
-      // Логирование для отладки
-      console.log('Edge Function response:', { data, error });
-
-      if (error) {
-        console.error('Edge Function error:', error);
-        throw new Error(`Failed to verify photo: ${error.message || JSON.stringify(error)}`);
+      try {
+        console.log('Using local AI verification (no server fallback)...');
+        const localResult = await verifyPhotoLocally(photoUri, challengeTitle, challengeData);
+        
+        // Return the result (even if verification failed, we don't fall back to server)
+        console.log('Local AI verification result:', localResult);
+        return {
+          success: localResult.success && localResult.verified,
+          message: localResult.message,
+          verified: localResult.verified,
+        };
+      } catch (error) {
+        console.error('Local AI verification error:', error);
+        throw new Error(`Local AI verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-
-      if (!data) {
-        console.error('No data returned from Edge Function');
-        throw new Error('No response from verification service');
-      }
-
-      if (!data.success) {
-        console.error('Verification failed:', data.error, data.details);
-        throw new Error(data?.error || 'Verification failed');
-      }
-
-      // Ensure verified is a boolean (handle case where it might be string or undefined)
-      const verified = data.verified === true || data.verified === 'true';
-      
-      console.log('Verification result:', { verified, rawVerified: data.verified, rawResponse: data.rawResponse });
-
-      // Return VerificationResult directly (apiCall will wrap it in ApiResponse)
-      return {
-        success: verified,
-        message: data.message || (verified 
-          ? `Photo verified! It matches the challenge "${challengeTitle}"`
-          : `Photo doesn't seem to match the challenge. Please try again.`),
-        verified: verified,
-      };
     });
   },
 

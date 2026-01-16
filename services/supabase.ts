@@ -122,6 +122,8 @@ export interface DbChallenge {
   title: string;
   points: number;
   created_at: string;
+  // Local AI field
+  detectable_object?: string | null;
 }
 
 export interface DbPhoto {
@@ -361,6 +363,8 @@ export function dbChallengeToChallenge(dbChallenge: DbChallenge): Challenge {
     points: dbChallenge.points,
     completed: false, // Will be set based on user context
     completedBy: [], // Will be fetched separately
+    // Local AI field from database
+    detectable_object: dbChallenge.detectable_object ?? null,
   };
 }
 
@@ -423,3 +427,10 @@ export function dbUsersChallengeToPost(dbPost: DbUsersChallenge, username: strin
     aspectRatio: dbPost.aspect_ratio,
   };
 }
+
+// =============================================
+// YOLO Vocabulary Functions
+// =============================================
+
+// Vocabulary is now loaded from code (localAIService.ts), not from database
+// This function is kept for backward compatibility but vocabulary should be loaded from code

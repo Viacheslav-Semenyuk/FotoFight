@@ -47,6 +47,7 @@ export default function CameraScreen() {
   const [showChallengeDropdown, setShowChallengeDropdown] = useState(false);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto'>('off');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'loading'; message: string } | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -246,6 +247,14 @@ export default function CameraScreen() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   };
 
+  const toggleFlash = () => {
+    setFlashMode(current => {
+      if (current === 'off') return 'on';
+      if (current === 'on') return 'auto';
+      return 'off';
+    });
+  };
+
   const handleRetake = () => {
     setCapturedPhoto(null);
     setIsCapturing(false);
@@ -386,9 +395,13 @@ export default function CameraScreen() {
 
     try {
       // Send photo to AI for verification
+      // Pass challengeData with detectable_object from database
       const verifyResult = await photoService.verifyPhotoWithAI(
-        capturedPhoto, 
-        selectedChallenge.title
+        capturedPhoto,
+        selectedChallenge.title,
+        {
+          detectable_object: selectedChallenge.detectable_object ?? null,
+        }
       );
 
       // Debug logging
@@ -732,6 +745,7 @@ export default function CameraScreen() {
             facing={facing}
             mirror={false}
             videoStabilizationMode="off"
+            flash={flashMode}
           />
         ) : (
           <View style={styles.cameraView}>
@@ -764,12 +778,30 @@ export default function CameraScreen() {
         )}
         <View style={[styles.cameraControls, centerContent && styles.cameraControlsDesktop]}>
           {!(isDesktop && isWeb) && (
-            <Pressable
-              style={styles.flipButton}
-              onPress={toggleCameraFacing}
-            >
-              <Ionicons name="camera-reverse" size={28} color="#fff" />
-            </Pressable>
+            <>
+              {Platform.OS === 'android' && (
+                <Pressable
+                  style={styles.flashButton}
+                  onPress={toggleFlash}
+                >
+                  <Ionicons 
+                    name={
+                      flashMode === 'off' ? 'flash-off' : 
+                      flashMode === 'on' ? 'flash' : 
+                      'flash-outline'
+                    } 
+                    size={28} 
+                    color={flashMode === 'off' ? 'rgba(255, 255, 255, 0.5)' : '#fff'} 
+                  />
+                </Pressable>
+              )}
+              <Pressable
+                style={styles.flipButton}
+                onPress={toggleCameraFacing}
+              >
+                <Ionicons name="camera-reverse" size={28} color="#fff" />
+              </Pressable>
+            </>
           )}
           <Pressable
             style={({ hovered, pressed }: WebPressableState) => [
@@ -790,7 +822,13 @@ export default function CameraScreen() {
               />
             )}
           </Pressable>
-          {!(isDesktop && isWeb) && <View style={styles.flipButtonPlaceholder} />}
+          {!(isDesktop && isWeb) && (
+            Platform.OS === 'android' ? (
+              <View style={styles.flipButtonPlaceholder} />
+            ) : (
+              <View style={styles.flipButtonPlaceholder} />
+            )
+          )}
         </View>
       </View>
     </View>
@@ -930,6 +968,14 @@ const styles = StyleSheet.create({
   },
   cameraControlsDesktop: {
     backgroundColor: '#262626',
+  },
+  flashButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   flipButton: {
     width: 50,

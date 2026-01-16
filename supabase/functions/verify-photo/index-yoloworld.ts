@@ -9,7 +9,6 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 const ROBOFLOW_API_KEY = Deno.env.get('ROBOFLOW_API_KEY');
 const ROBOFLOW_API_URL = 'https://infer.roboflow.com/yolo_world/infer';
 const YOLO_MODEL_VERSION = Deno.env.get('YOLO_MODEL_VERSION') || 'l'; // s, m, l, x
-const CONFIDENCE_THRESHOLD = parseFloat(Deno.env.get('YOLO_CONFIDENCE_THRESHOLD') || '0.25');
 
 interface VerifyRequest {
   photoBase64: string;
@@ -27,28 +26,6 @@ function extractObjectFromChallenge(title: string): string {
   
   // Convert to lowercase for better matching
   return object.toLowerCase();
-}
-
-// Check if detected class matches the object we're looking for
-function matchesObject(detectedClass: string, targetObject: string): boolean {
-  const detected = detectedClass.toLowerCase().trim();
-  const target = targetObject.toLowerCase().trim();
-  
-  // Exact match
-  if (detected === target) return true;
-  
-  // Check if one contains the other (for cases like "wall clock" vs "clock")
-  if (detected.includes(target) || target.includes(detected)) return true;
-  
-  // Handle common variations
-  // Remove common articles and prepositions
-  const cleanDetected = detected.replace(/\b(the|a|an|on|in|at)\b/g, '').trim();
-  const cleanTarget = target.replace(/\b(the|a|an|on|in|at)\b/g, '').trim();
-  
-  if (cleanDetected === cleanTarget) return true;
-  if (cleanDetected.includes(cleanTarget) || cleanTarget.includes(cleanDetected)) return true;
-  
-  return false;
 }
 
 serve(async (req: Request) => {
@@ -72,14 +49,11 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'ROBOFLOW_API_KEY is not set. Please configure it in Supabase Dashboard → Edge Functions → Settings',
+          error: 'ROBOFLOW_API_KEY is not set',
         }),
         { 
           status: 500,
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
+          headers: { 'Content-Type': 'application/json' },
         },
       );
     }
@@ -101,10 +75,7 @@ serve(async (req: Request) => {
         }),
         { 
           status: 400,
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
+          headers: { 'Content-Type': 'application/json' },
         },
       );
     }
@@ -143,7 +114,7 @@ serve(async (req: Request) => {
         },
       ],
       text: [objectToDetect], // The object we want to detect from challenge
-      confidence: CONFIDENCE_THRESHOLD, // Confidence threshold
+      confidence: 0.25, // Confidence threshold (can be adjusted)
     };
 
     console.log('Roboflow request payload (without image data):', {
@@ -166,28 +137,15 @@ serve(async (req: Request) => {
     if (!roboflowRes.ok) {
       const errText = await roboflowRes.text();
       console.error('Roboflow API error:', errText);
-      
-      // Try to parse error message
-      let errorMessage = 'Roboflow API error';
-      try {
-        const errorData = JSON.parse(errText);
-        errorMessage = errorData?.message || errorData?.error || errorMessage;
-      } catch (e) {
-        errorMessage = errText.slice(0, 200); // First 200 chars
-      }
-      
       return new Response(
         JSON.stringify({
           success: false,
-          error: errorMessage,
+          error: 'Roboflow API error',
           details: errText,
         }),
         { 
           status: 500,
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
+          headers: { 'Content-Type': 'application/json' },
         },
       );
     }
@@ -199,27 +157,20 @@ serve(async (req: Request) => {
     const predictions = data?.predictions || [];
     const hasDetections = predictions.length > 0;
     
-    // Filter predictions that match our object
+    // Get the highest confidence detection for the object
     const relevantDetections = predictions.filter((pred: any) => {
-      const predClass = pred.class || '';
-      return matchesObject(predClass, objectToDetect);
+      const predClass = (pred.class || '').toLowerCase();
+      return predClass.includes(objectToDetect) || objectToDetect.includes(predClass);
     });
 
     // Verify if we found the object with reasonable confidence
-    // We consider it verified if:
-    // 1. We have detections that match the object, OR
-    // 2. We have any detection with high confidence (>= 0.5)
     const verified = hasDetections && (
       relevantDetections.length > 0 || 
-      predictions.some((pred: any) => (pred.confidence || 0) >= 0.5)
+      predictions.some((pred: any) => (pred.confidence || 0) >= 0.3)
     );
 
     const maxConfidence = predictions.length > 0
       ? Math.max(...predictions.map((p: any) => p.confidence || 0))
-      : 0;
-
-    const relevantMaxConfidence = relevantDetections.length > 0
-      ? Math.max(...relevantDetections.map((p: any) => p.confidence || 0))
       : 0;
 
     console.log('Verification result:', {
@@ -227,7 +178,6 @@ serve(async (req: Request) => {
       detectionsFound: predictions.length,
       relevantDetections: relevantDetections.length,
       maxConfidence,
-      relevantMaxConfidence,
       objectToDetect,
     });
 
@@ -236,9 +186,7 @@ serve(async (req: Request) => {
         success: true,
         verified,
         detections: predictions.length,
-        relevantDetections: relevantDetections.length,
         maxConfidence,
-        relevantMaxConfidence,
         objectToDetect,
         rawResponse: data,
       }),
@@ -260,10 +208,7 @@ serve(async (req: Request) => {
       }),
       { 
         status: 500,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+        headers: { 'Content-Type': 'application/json' },
       },
     );
   }

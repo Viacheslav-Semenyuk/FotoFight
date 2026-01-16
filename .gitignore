@@ -48,3 +48,9 @@ web-build/
 # Misc
 *.log
 *.pem
+
+# Model files (too large for git, users should download their own)
+*.tflite
+*.pt
+yolov8*.tflite
+yolov8*.pt
