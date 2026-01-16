@@ -50,7 +50,10 @@ web-build/
 *.pem
 
 # Model files (too large for git, users should download their own)
+# Note: yolov8s-worldv2_int8.tflite is required for builds
 *.tflite
+!yolov8s-worldv2_int8.tflite
 *.pt
 yolov8*.tflite
+!yolov8s-worldv2_int8.tflite
 yolov8*.pt

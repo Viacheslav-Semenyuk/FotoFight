@@ -1,5 +1,5 @@
 import { apiCall, ApiResponse } from './api';
-import { Challenge } from '../data/mockData';
+import { Challenge } from './supabase';
 import { supabase, dbChallengeToChallenge } from './supabase';
 
 export interface ChallengeWithStatus extends Challenge {

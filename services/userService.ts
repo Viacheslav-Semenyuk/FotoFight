@@ -1,5 +1,5 @@
 import { apiCall, ApiResponse } from './api';
-import { User, CURRENT_USER_ID } from '../data/mockData';
+import { User } from './supabase';
 import { supabase, dbUserToUser, uploadAvatar, deleteAvatar, uriToBlob, PHOTOS_BUCKET } from './supabase';
 
 export interface UserStats {

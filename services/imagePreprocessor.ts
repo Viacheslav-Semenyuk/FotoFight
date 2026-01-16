@@ -14,7 +14,7 @@ import { EncodingType } from 'expo-file-system';
 /**
  * Model input size for YOLOv8 (can be adjusted based on your model)
  */
-const MODEL_INPUT_SIZE = 640;
+export const MODEL_INPUT_SIZE = 640;
 
 /**
  * Preprocess image for YOLO model input

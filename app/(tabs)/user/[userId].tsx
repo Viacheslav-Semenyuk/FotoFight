@@ -11,14 +11,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { userService, photoService, User, Photo, CURRENT_USER_ID } from '../../../services';
+import { userService, photoService, User, Photo } from '../../../services';
 import { useResponsive, CONTENT_MAX_WIDTH } from '../../../hooks/useResponsive';
 import FeedImage from '../../../components/FeedImage';
 import Avatar from '../../../components/Avatar';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const { userId } = useLocalSearchParams<{ userId: string }>();
+  const { user: currentUser } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,7 +37,7 @@ export default function UserProfileScreen() {
   // Redirect to own profile if viewing current user
   useFocusEffect(
     useCallback(() => {
-      if (userId === CURRENT_USER_ID) {
+      if (currentUser && userId === currentUser.id) {
         router.replace('/(tabs)/profile');
         return;
       }

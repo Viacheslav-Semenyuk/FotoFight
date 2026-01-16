@@ -1,5 +1,5 @@
 import { apiCall, ApiResponse, simulateNetworkDelay } from './api';
-import { Photo, Post } from '../data/mockData';
+import { Photo, Post } from './supabase';
 import { supabase, uploadPhoto, uriToBlob, dbUsersChallengeToPhoto, dbUsersChallengeToPost } from './supabase';
 import { userService } from './userService';
 import { challengeService } from './challengeService';

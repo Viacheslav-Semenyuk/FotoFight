@@ -3,7 +3,50 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { EncodingType } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
-import { User, Challenge, Photo, Post } from '../data/mockData';
+
+// Application types
+export interface User {
+  id: string;
+  username: string;
+  points: number;
+  challengesCompleted: number;
+  avatarUrl?: string;
+}
+
+export interface Challenge {
+  id: string;
+  title: string;
+  points: number;
+  completed: boolean;
+  completedBy: string[];
+  detectable_object?: string | null;
+}
+
+export interface Photo {
+  id: string;
+  userId: string;
+  username: string;
+  uri: string;
+  challengeId: string;
+  challengeTitle: string;
+  challengePoints: number;
+  timestamp: number;
+  aspectRatio: number;
+  verified: boolean;
+}
+
+export interface Post {
+  id: string;
+  username: string;
+  userId: string;
+  avatarUrl?: string;
+  challengeId: string;
+  challengeDescription: string;
+  challengePoints: number;
+  photoUri: string;
+  timestamp: number;
+  aspectRatio: number;
+}
 
 const supabaseUrl = 'https://vfpufhvjieelesndblhj.supabase.co';
 const supabaseAnonKey = 'sb_publishable_3yY7RmHWXiBrFz6e2tEUuA_NoPZwokH';
