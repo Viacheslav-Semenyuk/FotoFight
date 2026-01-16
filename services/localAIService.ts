@@ -550,39 +550,30 @@ export async function verifyPhotoLocally(
     }
     
     // Load YOLO-Worldv2 model
-    // Use require() for bundled assets - Metro will handle missing files during build
+    // Metro resolver will return empty module if file is missing, allowing build to continue
     let modelPath: any;
     try {
-      // For Android: use require() to load bundled asset
-      // Note: If file doesn't exist, Metro bundler will fail during build
-      // This is expected - the model file must be added before building
       if (Platform.OS === 'android') {
         // @ts-ignore - Metro bundler will handle this for Android builds
-        // If file is missing, build will fail with clear error message
+        // If file is missing, Metro resolver returns empty module, so modelPath will be undefined
         modelPath = require('../../assets/models/yolov8s-worldv2_int8.tflite');
-        if (!modelPath) {
-          throw new Error('Model file resolved to null');
+        
+        // Check if modelPath is valid (not empty module from Metro resolver)
+        if (!modelPath || (typeof modelPath === 'object' && Object.keys(modelPath).length === 0)) {
+          throw new Error('Model file not found or empty');
         }
         console.log('Using YOLO-Worldv2 model with custom vocabulary (251 classes)');
       } else {
         throw new Error('Model loading only supported on Android');
       }
     } catch (e: any) {
-      // If require fails (file missing), provide helpful error message
+      // If require fails or returns empty module, provide helpful error message
       const errorMessage = e?.message || 'Unknown error';
-      if (errorMessage.includes('Unable to resolve') || errorMessage.includes('not found')) {
-        return {
-          success: false,
-          verified: false,
-          message: 'AI model not found. Please add yolov8s-worldv2_int8.tflite to assets/models/ and rebuild the app. See docs/YOLO_WORLD_ANDROID_SETUP.md for instructions.',
-          detections: [],
-        };
-      }
-      console.warn('Failed to load model:', e);
+      console.warn('Failed to load model:', errorMessage);
       return {
         success: false,
         verified: false,
-        message: `Failed to load AI model: ${errorMessage}. Make sure yolov8s-worldv2_int8.tflite is in assets/models/ and rebuild the app.`,
+        message: 'AI model not found. Please add yolov8s-worldv2_int8.tflite to assets/models/ and rebuild the app. See docs/YOLO_WORLD_ANDROID_SETUP.md for instructions.',
         detections: [],
       };
     }
