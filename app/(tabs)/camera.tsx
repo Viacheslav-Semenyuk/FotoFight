@@ -57,6 +57,7 @@ export default function CameraScreen() {
   const [signInError, setSignInError] = useState('');
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
+  const [forceRemount, setForceRemount] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const dropdownRef = useRef<View>(null);
   const isTogglingRef = useRef(false);
@@ -261,12 +262,13 @@ export default function CameraScreen() {
     }
 
     // Web: известная проблема - expo-camera не поддерживает переключение камеры на веб
-    // Пробуем максимально агрессивный подход с полным пересозданием компонента
+    // Используем максимально агрессивный подход: полностью удаляем компонент из DOM
     console.log('Switching camera on web, current facing:', facing);
     
-    // Полностью остановить камеру
+    // Полностью остановить камеру и принудительно удалить из DOM
     setIsCameraActive(false);
     setIsCapturing(false);
+    setForceRemount(true); // Принудительно удалить компонент
     
     // Сбросить ref
     if (cameraRef.current) {
@@ -281,14 +283,15 @@ export default function CameraScreen() {
       setFacing(newFacing);
       
       // Форсировать ремонт с новым key (увеличиваем значительно)
-      setCameraKey(prev => prev + 10); // Большой скачок для гарантированного пересоздания
+      setCameraKey(prev => prev + 100); // Очень большой скачок для гарантированного пересоздания
+      setForceRemount(false); // Разрешить создание нового компонента
 
       // Реактивировать камеру с большой задержкой для мобильных браузеров
       setTimeout(() => {
         console.log('Reactivating camera with facing:', newFacing);
         setIsCameraActive(true);
-      }, 1000); // Увеличено до 1000ms для мобильных браузеров
-    }, 500); // Увеличено до 500ms для полной остановки камеры
+      }, 1200); // Увеличено до 1200ms для мобильных браузеров
+    }, 600); // Увеличено до 600ms для полной остановки камеры
   };
 
   const toggleFlash = () => {
@@ -782,7 +785,7 @@ export default function CameraScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.cameraWrapper, centerContent && styles.cameraWrapperDesktop]}>
-        {isCameraActive ? (
+        {isCameraActive && !forceRemount ? (
           <CameraView
             key={isWeb ? `camera-${facing}-${cameraKey}` : undefined}
             ref={cameraRef}
