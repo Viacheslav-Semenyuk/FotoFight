@@ -252,25 +252,23 @@ export default function CameraScreen() {
   };
 
   const toggleCameraFacing = () => {
-    if (isWeb) {
-      // On web, we need to temporarily deactivate camera to force reinitialization
-      // First, deactivate camera
-      setIsCameraActive(false);
-      
-      // Wait a bit for camera to fully stop, then change facing and remount
-      setTimeout(() => {
-        // Force camera component to remount by changing key
-        setCameraKey(prev => prev + 1);
-        // Change facing
-        setFacing(current => (current === 'back' ? 'front' : 'back'));
-        // Reactivate camera after another delay to allow facing change to take effect
-        setTimeout(() => {
-          setIsCameraActive(true);
-        }, 300);
-      }, 200);
-    } else {
+    if (!isWeb) {
       setFacing(current => (current === 'back' ? 'front' : 'back'));
+      return;
     }
+
+    // Web: полностью остановить камеру
+    setIsCameraActive(false);
+
+    setTimeout(() => {
+      // Смена facing
+      setFacing(current => (current === 'back' ? 'front' : 'back'));
+      // Форсировать ремонт
+      setCameraKey(prev => prev + 1);
+
+      // Реактивировать камеру с задержкой (увеличено до 500ms для стабильности на iOS Safari)
+      setTimeout(() => setIsCameraActive(true), 500);
+    }, 200);
   };
 
   const toggleFlash = () => {
