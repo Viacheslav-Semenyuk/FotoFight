@@ -56,6 +56,7 @@ export default function CameraScreen() {
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState('');
   const [isCapturing, setIsCapturing] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
   const cameraRef = useRef<CameraView>(null);
   const dropdownRef = useRef<View>(null);
   const isTogglingRef = useRef(false);
@@ -116,6 +117,13 @@ export default function CameraScreen() {
   useEffect(() => {
     capturedPhotoRef.current = capturedPhoto;
   }, [capturedPhoto]);
+
+  // Force camera remount on web when facing changes and camera is active
+  useEffect(() => {
+    if (isWeb && isCameraActive && cameraKey > 0) {
+      // Key will be incremented by toggleCameraFacing, this ensures remount happens
+    }
+  }, [facing, isWeb, isCameraActive, cameraKey]);
 
   // Control camera activation based on screen focus
   useFocusEffect(
@@ -246,12 +254,20 @@ export default function CameraScreen() {
   const toggleCameraFacing = () => {
     if (isWeb) {
       // On web, we need to temporarily deactivate camera to force reinitialization
+      // First, deactivate camera
       setIsCameraActive(false);
-      setFacing(current => (current === 'back' ? 'front' : 'back'));
-      // Reactivate camera after a short delay to allow facing change to take effect
+      
+      // Wait a bit for camera to fully stop, then change facing and remount
       setTimeout(() => {
-        setIsCameraActive(true);
-      }, 100);
+        // Force camera component to remount by changing key
+        setCameraKey(prev => prev + 1);
+        // Change facing
+        setFacing(current => (current === 'back' ? 'front' : 'back'));
+        // Reactivate camera after another delay to allow facing change to take effect
+        setTimeout(() => {
+          setIsCameraActive(true);
+        }, 300);
+      }, 200);
     } else {
       setFacing(current => (current === 'back' ? 'front' : 'back'));
     }
@@ -750,7 +766,7 @@ export default function CameraScreen() {
       <View style={[styles.cameraWrapper, centerContent && styles.cameraWrapperDesktop]}>
         {isCameraActive ? (
           <CameraView
-            key={isWeb ? `camera-${facing}` : undefined}
+            key={isWeb ? `camera-${facing}-${cameraKey}` : undefined}
             ref={cameraRef}
             style={styles.cameraView}
             facing={facing}
