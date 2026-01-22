@@ -153,8 +153,29 @@ export default function CameraScreen() {
 
       // Set stream to video element
       if (videoRef.current) {
+        // Stop and clear old stream from video element first
+        if (videoRef.current.srcObject) {
+          const oldStream = videoRef.current.srcObject as MediaStream;
+          oldStream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+          videoRef.current.pause();
+          videoRef.current.srcObject = null;
+          // Small delay to ensure video element is fully cleared
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        // Set new stream
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        
+        // Play with error handling for AbortError
+        try {
+          await videoRef.current.play();
+        } catch (error: any) {
+          // Ignore AbortError - it happens when stream is changed quickly
+          if (error.name !== 'AbortError') {
+            console.error('Error playing video:', error);
+            throw error;
+          }
+        }
       }
 
       return stream;
@@ -171,6 +192,7 @@ export default function CameraScreen() {
       streamRef.current = null;
     }
     if (videoRef.current) {
+      videoRef.current.pause();
       videoRef.current.srcObject = null;
     }
   }, []);
@@ -290,6 +312,25 @@ export default function CameraScreen() {
     };
   }, [isCameraActive, facing, flashMode, permission?.granted, getCameraStream, stopCameraStream]);
 
+  // Web: Stop camera when page becomes hidden (e.g., user switches tabs)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page is hidden, stop camera stream
+        stopCameraStream();
+        setIsCameraActive(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [stopCameraStream]);
+
   // Control camera activation based on screen focus
   useFocusEffect(
     useCallback(() => {
@@ -343,8 +384,12 @@ export default function CameraScreen() {
       return () => {
         setIsCameraActive(false);
         setIsCapturing(false);
+        // Explicitly stop camera stream for web
+        if (Platform.OS === 'web') {
+          stopCameraStream();
+        }
       };
-    }, [loadChallenges, preselectedChallengeId, authUser])
+    }, [loadChallenges, preselectedChallengeId, authUser, stopCameraStream])
   );
 
   const handleCapture = async () => {
@@ -444,8 +489,11 @@ export default function CameraScreen() {
     const newFacing = facing === 'back' ? 'front' : 'back';
     console.log('Switching camera on web, from', facing, 'to', newFacing);
     
-    // Stop current stream
+    // Stop current stream and wait a bit for it to fully stop
     stopCameraStream();
+    
+    // Small delay to ensure old stream is fully stopped
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     // Update facing state
     setFacing(newFacing);

@@ -211,9 +211,11 @@ export const photoService = {
           }
           
           // Build message based on verification result
+          // Extract object name from challenge title if objectToDetect is not available
+          const objectName = data.objectToDetect || challengeTitle.replace(/^snap\s+(a|an)\s+/i, '').trim().replace(/[.,!?;:]$/, '') || 'object';
           const message = data.verified
-            ? `Photo verified! Object "${data.objectToDetect || 'object'}" detected with confidence ${(data.relevantMaxConfidence || data.maxConfidence || 0).toFixed(2)}.`
-            : `Photo verification failed. Object "${data.objectToDetect || 'object'}" not found in the image. Please try again with a clearer photo.`;
+            ? `Photo verified! Object "${objectName}" detected with confidence ${(data.relevantMaxConfidence || data.maxConfidence || 0).toFixed(2)}.`
+            : `Photo verification failed. Object "${objectName}" not found in the image. Please try again with a clearer photo.`;
           
           return {
             success: data.success === true,
