@@ -67,6 +67,15 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </Pressable>
 
+          {/* Show Logs Button */}
+          <Pressable style={styles.settingItem} onPress={() => router.push('/logs')}>
+            <View style={styles.settingContent}>
+              <Ionicons name="document-text-outline" size={24} color="#262626" />
+              <Text style={styles.settingText}>Show Logs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </Pressable>
+
           {/* Delete Account Button */}
           <Pressable style={styles.settingItem} onPress={() => router.push('/(tabs)/account-deletion')}>
             <View style={styles.settingContent}>

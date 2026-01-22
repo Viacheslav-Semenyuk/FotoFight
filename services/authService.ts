@@ -28,9 +28,20 @@ const getRedirectUrl = () => {
     // Fallback for SSR
     return 'http://localhost:8081/auth/callback';
   }
-  // For native, use the app scheme (must match app.json scheme)
-  // Make sure this exact URL is added in Supabase Dashboard
-  return 'foto-fight://auth/callback';
+  
+  // For native platforms, use makeRedirectUri to automatically detect the correct URI
+  // For Expo Go, use useProxy: true to create a proxy through Expo server (works across networks)
+  // For development/production builds, use custom scheme
+  const redirectUri = AuthSession.makeRedirectUri({
+    path: 'auth/callback',
+    scheme: 'foto-fight', // Fallback scheme for development/production builds
+    useProxy: true, // Use Expo proxy for Expo Go - creates https://auth.expo.io/... URL
+  });
+  
+  console.log('[getRedirectUrl] Platform:', Platform.OS);
+  console.log('[getRedirectUrl] Generated redirect URI:', redirectUri);
+  
+  return redirectUri;
 };
 
 // Helper function to extract tokens from OAuth callback URL
@@ -71,8 +82,10 @@ export const authService = {
    * Sign in with Google OAuth
    */
   signInWithGoogle: async (): Promise<AuthResponse> => {
+    console.log('[signInWithGoogle] Function called');
     try {
       const redirectUrl = getRedirectUrl();
+      console.log('[signInWithGoogle] Redirect URL:', redirectUrl);
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -152,8 +165,10 @@ export const authService = {
    * Sign in with Apple OAuth
    */
   signInWithApple: async (): Promise<AuthResponse> => {
+    console.log('[signInWithApple] Function called');
     try {
       const redirectUrl = getRedirectUrl();
+      console.log('[signInWithApple] Redirect URL:', redirectUrl);
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
@@ -256,11 +271,11 @@ export const authService = {
         });
 
         if (profileError) {
-          console.error('Error creating user profile:', profileError);
+          console.error('[AuthService] Error creating user profile:', profileError);
         }
       }
     } catch (error) {
-      console.error('Error ensuring user profile:', error);
+      console.error('[AuthService] Error ensuring user profile:', error);
     }
   },
 
@@ -301,7 +316,7 @@ export const authService = {
       });
 
       if (profileError) {
-        console.error('Error creating user profile:', profileError);
+        console.error('[AuthService] Error creating user profile:', profileError);
         // Don't fail the signup, but log the error
       }
 
@@ -391,7 +406,7 @@ export const authService = {
     try {
       const { data, error } = await supabase.auth.getSession();
       if (error) {
-        console.error('Error getting session:', error);
+        console.error('[AuthService] Error getting session:', error);
         return null;
       }
       return data.session;
@@ -408,7 +423,7 @@ export const authService = {
     try {
       const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.error('Error getting user:', error);
+        console.error('[AuthService] Error getting user:', error);
         return null;
       }
       return data.user;

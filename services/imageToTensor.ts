@@ -65,7 +65,7 @@ export async function preprocessImageForYOLO(uri: string): Promise<Float32Array>
     // For testing, we'll fill with zeros (black image)
     // This will need to be replaced with actual pixel extraction
     
-    console.warn('Image preprocessing: Using placeholder tensor. Pixel extraction needs to be implemented.');
+    console.warn('[ImageToTensor] Image preprocessing: Using placeholder tensor. Pixel extraction needs to be implemented.');
     
     return tensor;
     

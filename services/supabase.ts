@@ -94,7 +94,7 @@ const createStorageAdapter = () => {
       try {
         return await SecureStore.getItemAsync(key);
       } catch (error) {
-        console.error('Error getting item from SecureStore:', error);
+        console.error('[Supabase] Error getting item from SecureStore:', error);
         return null;
       }
     },
@@ -102,14 +102,14 @@ const createStorageAdapter = () => {
       try {
         await SecureStore.setItemAsync(key, value);
       } catch (error) {
-        console.error('Error setting item in SecureStore:', error);
+        console.error('[Supabase] Error setting item in SecureStore:', error);
       }
     },
     removeItem: async (key: string): Promise<void> => {
       try {
         await SecureStore.deleteItemAsync(key);
       } catch (error) {
-        console.error('Error removing item from SecureStore:', error);
+        console.error('[Supabase] Error removing item from SecureStore:', error);
       }
     },
   };
@@ -207,30 +207,49 @@ export async function uploadPhoto(
   userId: string,
   challengeId: string
 ): Promise<string> {
+  console.log('[Supabase] uploadPhoto called:', {
+    fileType: file instanceof File ? 'File' : file instanceof Blob ? 'Blob' : 'ArrayBuffer',
+    fileSize: file instanceof File ? file.size : file instanceof Blob ? file.size : (file as ArrayBuffer).byteLength,
+    userId,
+    challengeId,
+  });
+
   const fileExt = file instanceof File ? file.name.split('.').pop() : 'jpg';
   const fileName = `${userId}/${Date.now()}_${challengeId}.${fileExt}`;
+  console.log('[Supabase] Uploading file:', fileName);
 
   // Determine content type
   const contentType = file instanceof File ? file.type : 'image/jpeg';
+  console.log('[Supabase] Content type:', contentType);
 
-  const { data, error } = await supabase.storage
-    .from(PHOTOS_BUCKET)
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: contentType,
-    });
+  try {
+    const { data, error } = await supabase.storage
+      .from(PHOTOS_BUCKET)
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: contentType,
+      });
 
-  if (error) {
-    throw new Error(`Failed to upload photo: ${error.message}`);
+    if (error) {
+      console.error('[Supabase] Upload error:', error);
+      throw new Error(`Failed to upload photo: ${error.message}`);
+    }
+
+    console.log('[Supabase] File uploaded, path:', data.path);
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(PHOTOS_BUCKET)
+      .getPublicUrl(data.path);
+
+    console.log('[Supabase] Public URL:', urlData.publicUrl);
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error('[Supabase] Upload exception:', error);
+    console.error('[Supabase] Upload exception stack:', error instanceof Error ? error.stack : 'No stack trace');
+    throw error;
   }
-
-  // Get public URL
-  const { data: urlData } = supabase.storage
-    .from(PHOTOS_BUCKET)
-    .getPublicUrl(data.path);
-
-  return urlData.publicUrl;
 }
 
 /**
@@ -295,7 +314,7 @@ export async function uploadAvatar(
     }
   } catch (error) {
     // Ignore errors when deleting old avatar
-    console.warn('Could not delete old avatar:', error);
+    console.warn('[Supabase] Could not delete old avatar:', error);
   }
 
   // Upload new avatar (use upsert to replace if exists)
@@ -367,20 +386,37 @@ export async function deleteAvatar(userId: string, avatarUrl?: string): Promise<
  * Convert URI to ArrayBuffer (for Android)
  */
 async function uriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
+  console.log('[Supabase] uriToArrayBuffer called with URI:', uri.substring(0, 100) + '...');
+  
   // If it's a base64 data URI
   if (uri.startsWith('data:')) {
-    const base64Data = uri.split(',')[1];
-    return decode(base64Data);
+    console.log('[Supabase] Processing base64 data URI');
+    try {
+      const base64Data = uri.split(',')[1];
+      const arrayBuffer = decode(base64Data);
+      console.log('[Supabase] Base64 decoded, size:', arrayBuffer.byteLength);
+      return arrayBuffer;
+    } catch (error) {
+      console.error('[Supabase] Error decoding base64:', error);
+      throw new Error(`Failed to decode base64: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   // For file:// URIs on Android, read file as base64 using expo-file-system
   // then convert to ArrayBuffer
+  console.log('[Supabase] Reading file from filesystem:', uri);
   try {
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: EncodingType.Base64,
     });
-    return decode(base64);
+    console.log('[Supabase] File read as base64, length:', base64.length);
+    
+    const arrayBuffer = decode(base64);
+    console.log('[Supabase] Base64 decoded to ArrayBuffer, size:', arrayBuffer.byteLength);
+    return arrayBuffer;
   } catch (error) {
+    console.error('[Supabase] Error reading file:', error);
+    console.error('[Supabase] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     throw new Error(`Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

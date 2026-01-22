@@ -25,7 +25,7 @@ export default function AuthCallback() {
             const refreshToken = hashParams.get('refresh_token');
 
             if (accessToken && refreshToken) {
-              console.log('Setting session from hash tokens');
+              console.log('[AuthCallback] Setting session from hash tokens');
               
               // Set the session with tokens from URL
               const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
@@ -34,13 +34,13 @@ export default function AuthCallback() {
               });
 
               if (sessionError) {
-                console.error('Error setting session:', sessionError);
+                console.error('[AuthCallback] Error setting session:', sessionError);
                 router.replace('/login');
                 return;
               }
 
               if (sessionData.session && sessionData.user) {
-                console.log('Session set successfully, user:', sessionData.user.email);
+                console.log('[AuthCallback] Session set successfully, user:', sessionData.user.email);
                 
                 // Ensure user profile exists
                 await authService.ensureUserProfile(sessionData.user);
@@ -82,12 +82,12 @@ export default function AuthCallback() {
                 }
                 return;
               } else {
-                console.error('No session or user after setSession');
+                console.error('[AuthCallback] No session or user after setSession');
                 router.replace('/login');
                 return;
               }
             } else {
-              console.error('Missing tokens in hash:', { accessToken: !!accessToken, refreshToken: !!refreshToken });
+              console.error('[AuthCallback] Missing tokens in hash:', { accessToken: !!accessToken, refreshToken: !!refreshToken });
             }
           }
         }
@@ -96,13 +96,13 @@ export default function AuthCallback() {
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
-          console.error('Error getting session:', error);
+          console.error('[AuthCallback] Error getting session:', error);
           router.replace('/login');
           return;
         }
 
         if (data.session) {
-          console.log('Found existing session');
+          console.log('[AuthCallback] Found existing session');
           
           // Ensure user profile exists
           if (data.session.user) {
@@ -139,11 +139,11 @@ export default function AuthCallback() {
             router.replace(returnTo as any);
           }
         } else {
-          console.error('No session found');
+          console.error('[AuthCallback] No session found');
           router.replace('/login');
         }
       } catch (error) {
-        console.error('Error handling callback:', error);
+        console.error('[AuthCallback] Error handling callback:', error);
         router.replace('/login');
       }
     };

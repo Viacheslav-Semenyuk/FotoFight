@@ -21,6 +21,7 @@ import * as FileSystem from 'expo-file-system';
 import { EncodingType } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Asset } from 'expo-asset';
+import Constants from 'expo-constants';
 import jpeg from 'jpeg-js';
 
 // Custom vocabulary from vocab.txt (251 classes for YOLO-Worldv2)
@@ -77,7 +78,7 @@ function loadCustomVocabulary(): string[] {
     'hydrant', 'cone', 'barrier', 'cart', 'bin', 'container',
   ];
 
-  console.log(`Loaded custom vocabulary from code: ${CUSTOM_VOCAB.length} classes for YOLO-Worldv2`);
+  console.log(`[LocalAIService] Loaded custom vocabulary from code: ${CUSTOM_VOCAB.length} classes for YOLO-Worldv2`);
   return CUSTOM_VOCAB;
 }
 
@@ -352,14 +353,14 @@ async function preprocessImage(uri: string): Promise<Float32Array> {
     }
 
     console.log(
-      `Image preprocessing: Extracted ${width}x${height} RGB pixels, ` +
+      `[LocalAIService] Image preprocessing: Extracted ${width}x${height} RGB pixels, ` +
       `normalized to Float32Array[${tensor.length}] for YOLO model`
     );
 
     return tensor;
     
   } catch (error) {
-    console.error('Image preprocessing error:', error);
+    console.error('[LocalAIService] Image preprocessing error:', error);
     throw new Error(
       `Failed to preprocess image: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -390,7 +391,7 @@ function postprocessOutput(
   try {
     
     if (!output || !Array.isArray(output) || output.length === 0) {
-      console.warn('Model output is empty or invalid');
+      console.warn('[LocalAIService] Model output is empty or invalid');
       return detections;
     }
     
@@ -398,7 +399,7 @@ function postprocessOutput(
     const outputTensor = output[0];
     
     if (!outputTensor || !(outputTensor instanceof Float32Array)) {
-      console.warn('Model output is not a valid tensor:', typeof outputTensor, outputTensor?.constructor?.name);
+      console.warn('[LocalAIService] Model output is not a valid tensor:', typeof outputTensor, outputTensor?.constructor?.name);
       return detections;
     }
     
@@ -417,16 +418,16 @@ function postprocessOutput(
       const legacyNumDetections = Math.floor(tensorSize / legacyElementsPerDetection);
       
       if (legacyNumDetections > 0 && tensorSize % legacyElementsPerDetection === 0) {
-        console.log('Detected legacy YOLO format (84 elements, COCO classes). Using COCO vocabulary.');
+        console.log('[LocalAIService] Detected legacy YOLO format (84 elements, COCO classes). Using COCO vocabulary.');
         // Use legacy processing with COCO classes
         return postprocessOutputLegacy(output, confidenceThreshold);
       }
       
-      console.warn(`Invalid tensor size for YOLO-Worldv2 output: ${tensorSize} (expected multiple of ${elementsPerDetection})`);
+      console.warn(`[LocalAIService] Invalid tensor size for YOLO-Worldv2 output: ${tensorSize} (expected multiple of ${elementsPerDetection})`);
       return detections;
     }
     
-    console.log(`Processing ${numDetections} detections from tensor of size ${tensorSize} (${numClasses} classes)`);
+    console.log(`[LocalAIService] Processing ${numDetections} detections from tensor of size ${tensorSize} (${numClasses} classes)`);
     
     // Process each detection
     // Format: [x, y, w, h, class_score_0, class_score_1, ..., class_score_250]
@@ -496,7 +497,7 @@ function postprocessOutput(
     return detections.slice(0, 100); // Return top 100 detections
     
   } catch (error) {
-    console.error('Error postprocessing YOLO output:', error);
+    console.error('[LocalAIService] Error postprocessing YOLO output:', error);
     return detections;
   }
 }
@@ -532,6 +533,18 @@ export async function verifyPhotoLocally(
     };
   }
 
+  // Check if running in Expo Go (native modules not available)
+  // In Expo SDK 51, executionEnvironment is a string: 'storeClient' (Expo Go), 'standalone', or 'bare'
+  const isExpoGo = Constants.executionEnvironment === 'storeClient';
+  if (isExpoGo) {
+    return {
+      success: false,
+      verified: false,
+      message: 'Local AI verification requires a development or production build. Expo Go does not support native modules like react-native-fast-tflite. Please build the app using "npm run build:android:local" or EAS Build.',
+      detections: [],
+    };
+  }
+
   // Using YOLO-Worldv2 model only
   const isYOLOWorld: boolean = true;
 
@@ -540,7 +553,32 @@ export async function verifyPhotoLocally(
     let TFLite;
     try {
       TFLite = require('react-native-fast-tflite');
+      
+      // Check if TFLite module is actually available (not just required without error)
+      if (!TFLite || !TFLite.loadTensorflowModel) {
+        // Module loaded but methods not available - likely Expo Go
+        return {
+          success: false,
+          verified: false,
+          message: 'TensorFlow Lite native module not available. This feature requires a development or production build. Expo Go does not support native modules. Please build the app using "npm run build:android:local" or EAS Build.',
+          detections: [],
+        };
+      }
     } catch (e) {
+      // Module not found or failed to load
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      console.error('[verifyPhotoLocally] Failed to load react-native-fast-tflite:', errorMessage);
+      
+      // Check if it's the "Tflite could not be found" error (Expo Go)
+      if (errorMessage.includes('Tflite') || errorMessage.includes('could not be found')) {
+        return {
+          success: false,
+          verified: false,
+          message: 'TensorFlow Lite native module not available in Expo Go. This feature requires a development or production build. Please build the app using "npm run build:android:local" or EAS Build.',
+          detections: [],
+        };
+      }
+      
       return {
         success: false,
         verified: false,
@@ -550,26 +588,106 @@ export async function verifyPhotoLocally(
     }
     
     // Load YOLO-Worldv2 model
-    // Metro resolver will return empty module if file is missing, allowing build to continue
+    // Try multiple methods to load the asset, as Metro may not handle .tflite files correctly
     let modelPath: any;
     try {
       if (Platform.OS === 'android') {
-        // @ts-ignore - Metro bundler will handle this for Android builds
-        // If file is missing, Metro resolver returns empty module, so modelPath will be undefined
-        modelPath = require('../../assets/models/yolov8s-worldv2_int8.tflite');
-        
-        // Check if modelPath is valid (not empty module from Metro resolver)
-        if (!modelPath || (typeof modelPath === 'object' && Object.keys(modelPath).length === 0)) {
-          throw new Error('Model file not found or empty');
+        // Method 1: Try require() - may return empty object for .tflite files
+        try {
+          // @ts-ignore - Metro bundler will handle this for Android builds
+          const requireResult = require('../../assets/models/yolov8s-worldv2_int8.tflite');
+          
+          // Check if require() returned a valid result (not undefined or null)
+          if (requireResult !== undefined && requireResult !== null) {
+            // Check if it's a valid asset (not empty object)
+            if (typeof requireResult === 'object') {
+              // Check if it's an empty object or valid asset
+              const keys = Object.keys(requireResult);
+              // Valid asset should have properties, or it's an empty object from Metro
+              if (keys.length > 0 && requireResult.type !== 'empty') {
+                modelPath = requireResult;
+                console.log('[LocalAIService] Model loaded via require():', typeof modelPath, modelPath);
+              } else if (keys.length === 0) {
+                // Empty object from Metro - will try other methods
+                console.log('[LocalAIService] require() returned empty object, trying other methods...');
+              }
+            } else if (typeof requireResult === 'number') {
+              // Asset ID as number
+              modelPath = requireResult;
+              console.log('[LocalAIService] Model loaded via require() as asset ID:', modelPath);
+            }
+          } else {
+            // require() returned undefined or null - module not found
+            console.log('[LocalAIService] require() returned undefined/null, trying other methods...');
+          }
+        } catch (requireError) {
+          console.log('[LocalAIService] require() failed, trying Asset API...', requireError);
         }
-        console.log('Using YOLO-Worldv2 model with custom vocabulary (251 classes)');
+        
+        // Method 2: Use Expo Asset API if require() failed or returned invalid result
+        if (!modelPath || (typeof modelPath === 'object' && Object.keys(modelPath).length === 0)) {
+          try {
+            // @ts-ignore - Try require again, but this time use Asset API
+            const assetModule = require('../../assets/models/yolov8s-worldv2_int8.tflite');
+            
+            // Check if assetModule is valid (not undefined/null)
+            if (assetModule !== undefined && assetModule !== null) {
+              const asset = Asset.fromModule(assetModule);
+              await asset.downloadAsync();
+              
+              if (asset.localUri || asset.uri) {
+                // For react-native-fast-tflite, we might need the asset ID or URI
+                // Try using the asset module directly, or the URI
+                modelPath = assetModule;
+                console.log('[LocalAIService] Model loaded via Asset API:', typeof modelPath, modelPath);
+                console.log('[LocalAIService] Asset URI:', asset.uri);
+              }
+            } else {
+              console.log('[LocalAIService] Asset module is undefined/null, trying direct path...');
+            }
+          } catch (assetError) {
+            console.log('[LocalAIService] Asset API failed, trying direct path...', assetError);
+          }
+        }
+        
+        // Method 3: Try direct string path for Android assets (last resort)
+        if (!modelPath || (typeof modelPath === 'object' && Object.keys(modelPath).length === 0)) {
+          // react-native-fast-tflite might accept a direct asset path string
+          // Format: "models/yolov8s-worldv2_int8.tflite" (relative to assets folder)
+          const directPath = 'models/yolov8s-worldv2_int8.tflite';
+          console.log('[LocalAIService] Trying direct asset path:', directPath);
+          // We'll try this in the loadTensorflowModel call below
+          modelPath = directPath;
+        }
+        
+        // Final validation
+        // Check if modelPath is valid (not undefined, null, empty object, or empty string)
+        const isValidModelPath = modelPath !== undefined && 
+                                 modelPath !== null && 
+                                 (typeof modelPath === 'number' || 
+                                  typeof modelPath === 'string' && modelPath.length > 0 ||
+                                  (typeof modelPath === 'object' && Object.keys(modelPath).length > 0));
+        
+        if (!isValidModelPath) {
+          console.error('[LocalAIService] Model file not found: All loading methods failed.');
+          console.error('[LocalAIService] modelPath value:', modelPath, 'type:', typeof modelPath);
+          console.error('[LocalAIService] 1. The file is missing from assets/models/');
+          console.error('[LocalAIService] 2. The app needs to be rebuilt (not just reloaded)');
+          console.error('[LocalAIService] 3. Metro cache needs to be cleared: npx expo start --clear');
+          console.error('[LocalAIService] 4. Make sure the file is copied to android/app/src/main/assets/models/');
+          throw new Error('Model file not found: All loading methods failed');
+        }
+        
+        console.log('[LocalAIService] Using YOLO-Worldv2 model with custom vocabulary (251 classes)');
+        console.log('[LocalAIService] Final model path type:', typeof modelPath, 'value:', modelPath);
       } else {
         throw new Error('Model loading only supported on Android');
       }
     } catch (e: any) {
-      // If require fails or returns empty module, provide helpful error message
+      // If all methods fail, provide helpful error message
       const errorMessage = e?.message || 'Unknown error';
-      console.warn('Failed to load model:', errorMessage);
+      console.error('[LocalAIService] Failed to load model:', errorMessage);
+      console.error('[LocalAIService] Model path value:', modelPath);
       return {
         success: false,
         verified: false,
@@ -580,8 +698,16 @@ export async function verifyPhotoLocally(
 
     // Load the model
     // react-native-fast-tflite API: loadTensorflowModel(asset) for bundled assets
+    // It can accept: asset ID (number), asset object, or string path to asset file
     let model;
     try {
+      // Final validation before loading model
+      if (modelPath === undefined || modelPath === null) {
+        throw new Error('Model path is undefined or null. Please ensure the model file exists in assets/models/ and rebuild the app.');
+      }
+      
+      console.log('[LocalAIService] Attempting to load model with path:', typeof modelPath, modelPath);
+      
       if (TFLite.loadTensorflowModel) {
         model = await TFLite.loadTensorflowModel(modelPath);
       } else if (TFLite.loadModel) {
@@ -590,12 +716,39 @@ export async function verifyPhotoLocally(
       } else {
         throw new Error('loadTensorflowModel or loadModel not found in react-native-fast-tflite');
       }
+      
+      if (model) {
+        console.log('[LocalAIService] Model loaded successfully!');
+      }
     } catch (loadError) {
-      console.error('Failed to load model:', loadError);
+      const errorMessage = loadError instanceof Error ? loadError.message : String(loadError);
+      console.error('[verifyPhotoLocally] Failed to load model:', errorMessage);
+      console.error('[verifyPhotoLocally] Model path that failed:', typeof modelPath, modelPath);
+      
+      // Check if it's the "Invalid source passed" error
+      if (errorMessage.includes('Invalid source passed') || errorMessage.includes('Invalid source')) {
+        return {
+          success: false,
+          verified: false,
+          message: `Failed to load AI model: TFLite: Invalid source passed! Source should be either a React Native require(..) or a { url: string } object!. Make sure the model file is valid and the app was rebuilt after adding it. The model file should be at assets/models/yolov8s-worldv2_int8.tflite.`,
+          detections: [],
+        };
+      }
+      
+      // Check if it's the "Tflite could not be found" error (Expo Go)
+      if (errorMessage.includes('Tflite') || errorMessage.includes('could not be found') || errorMessage.includes('TurboModuleRegistry')) {
+        return {
+          success: false,
+          verified: false,
+          message: 'TensorFlow Lite native module not available in Expo Go. This feature requires a development or production build. Please build the app using "npm run build:android:local" or EAS Build.',
+          detections: [],
+        };
+      }
+      
       return {
         success: false,
         verified: false,
-        message: `Failed to load AI model: ${loadError instanceof Error ? loadError.message : 'Unknown error'}. Make sure the model file is valid and the app was rebuilt after adding it.`,
+        message: `Failed to load AI model: ${errorMessage}. Make sure the model file is valid and the app was rebuilt after adding it.`,
         detections: [],
       };
     }
@@ -618,19 +771,19 @@ export async function verifyPhotoLocally(
     if (challengeData?.detectable_object) {
       // Use detectable_object from database if available
       objectToDetect = challengeData.detectable_object.toLowerCase().trim();
-      console.log('Local AI (YOLO-Worldv2): Using detectable_object from database:', objectToDetect);
-      console.log('Local AI: Direct matching - no COCO mapping needed with YOLO-Worldv2!');
+      console.log('[LocalAIService] Local AI (YOLO-Worldv2): Using detectable_object from database:', objectToDetect);
+      console.log('[LocalAIService] Local AI: Direct matching - no COCO mapping needed with YOLO-Worldv2!');
     } else {
       // Fallback to extracting from title
       objectToDetect = extractObjectFromChallenge(challengeTitle);
-      console.log('Local AI: Extracted object from title:', objectToDetect);
+      console.log('[LocalAIService] Local AI: Extracted object from title:', objectToDetect);
     }
     
     // isYOLOWorld already determined above when loading model
     if (isYOLOWorld) {
-      console.log('Using YOLO-Worldv2: Direct vocabulary matching (no COCO mapping needed)');
+      console.log('[LocalAIService] Using YOLO-Worldv2: Direct vocabulary matching (no COCO mapping needed)');
     } else {
-      console.log('Using legacy YOLO: COCO classes mapping required');
+      console.log('[LocalAIService] Using legacy YOLO: COCO classes mapping required');
     }
     
     // Preprocess image
@@ -646,7 +799,7 @@ export async function verifyPhotoLocally(
       // Run model with extracted pixel tensor
       output = await model.run([inputTensor]);
     } catch (runError) {
-      console.error('Model inference error:', runError);
+      console.error('[LocalAIService] Model inference error:', runError);
       throw new Error(
         `Failed to run model inference: ${runError instanceof Error ? runError.message : 'Unknown error'}`
       );
@@ -658,7 +811,7 @@ export async function verifyPhotoLocally(
     if (isYOLOWorld) {
       vocabulary = getVocabulary(); // Load from code, not database
       if (vocabulary.length === 0) {
-        console.warn('Vocabulary is empty. This should not happen.');
+        console.warn('[LocalAIService] Vocabulary is empty. This should not happen.');
       }
     }
     
@@ -670,7 +823,7 @@ export async function verifyPhotoLocally(
       ? postprocessOutput(output, vocabulary, 0.25, numClasses)
       : postprocessOutputLegacy(output, 0.25);
     
-    console.log(`Local AI: Found ${detections.length} total detections (using ${numClasses} classes)`);
+    console.log(`[LocalAIService] Local AI: Found ${detections.length} total detections (using ${numClasses} classes)`);
     
     // Filter detections that match our target object
     // For YOLO-Worldv2: Direct matching with vocabulary
@@ -704,7 +857,7 @@ export async function verifyPhotoLocally(
       }
     });
     
-    console.log(`Local AI: Found ${relevantDetections.length} relevant detections for "${objectToDetect}"`);
+    console.log(`[LocalAIService] Local AI: Found ${relevantDetections.length} relevant detections for "${objectToDetect}"`);
     
     // Check if we found the object with sufficient confidence
     const minConfidence = 0.25;
@@ -729,7 +882,7 @@ export async function verifyPhotoLocally(
     };
     
   } catch (error) {
-    console.error('Local AI verification error:', error);
+    console.error('[LocalAIService] Local AI verification error:', error);
     return {
       success: false,
       verified: false,

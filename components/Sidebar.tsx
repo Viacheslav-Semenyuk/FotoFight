@@ -17,6 +17,7 @@ const navItems: NavItem[] = [
   { name: 'camera', path: '/(tabs)/camera', icon: 'camera', label: 'Camera' },
   { name: 'leaderboard', path: '/(tabs)/leaderboard', icon: 'trophy', label: 'Ranking' },
   { name: 'profile', path: '/(tabs)/profile', icon: 'person', label: 'Profile' },
+  { name: 'logs', path: '/logs', icon: 'document-text', label: 'Logs' },
 ];
 
 export default function Sidebar() {

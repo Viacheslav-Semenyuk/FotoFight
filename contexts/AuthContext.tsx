@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null);
         }
       } catch (error) {
-        console.error('Error initializing session:', error);
+        console.error('[AuthContext] Error initializing session:', error);
         setSession(null);
         setUser(null);
       } finally {
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const currentUser = await authService.getCurrentUser();
             setUser(currentUser);
           } catch (error) {
-            console.error('Error getting user on auth state change:', error);
+            console.error('[AuthContext] Error getting user on auth state change:', error);
             setUser(null);
           }
         } else {

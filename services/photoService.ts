@@ -202,45 +202,74 @@ export const photoService = {
   // Submit a photo for a challenge
   submitPhoto: async (request: SubmitPhotoRequest): Promise<ApiResponse<Photo>> => {
     return apiCall(async () => {
+      console.log('[PhotoService] submitPhoto called with:', {
+        photoUri: request.photoUri,
+        challengeId: request.challengeId,
+        challengeTitle: request.challengeTitle,
+        challengePoints: request.challengePoints,
+        aspectRatio: request.aspectRatio,
+      });
+
       // Get current authenticated user
+      console.log('[PhotoService] Getting authenticated user...');
       const { data: authData, error: authError } = await supabase.auth.getUser();
       
       if (authError || !authData.user) {
+        console.error('[PhotoService] Authentication error:', authError);
         throw new Error('User not authenticated');
       }
 
       const userId = authData.user.id;
+      console.log('[PhotoService] User authenticated:', userId);
 
       // Get username from user profile
+      console.log('[PhotoService] Getting username from profile...');
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('username')
         .eq('id', userId)
         .single();
 
-      if (userError) throw userError;
+      if (userError) {
+        console.error('[PhotoService] Error getting user data:', userError);
+        throw userError;
+      }
       const username = userData?.username || 'Unknown';
+      console.log('[PhotoService] Username:', username);
 
       // 1. Upload photo to Supabase Storage
       let photoUrl: string;
       try {
+        console.log('[PhotoService] Converting photo URI to blob/arraybuffer...');
         const blob = await uriToBlob(request.photoUri);
+        console.log('[PhotoService] Photo converted, type:', blob instanceof ArrayBuffer ? 'ArrayBuffer' : 'Blob', 'size:', blob instanceof ArrayBuffer ? blob.byteLength : (blob as Blob).size);
+        
+        console.log('[PhotoService] Uploading photo to Supabase Storage...');
         photoUrl = await uploadPhoto(blob, userId, request.challengeId);
+        console.log('[PhotoService] Photo uploaded successfully, URL:', photoUrl);
       } catch (error) {
+        console.error('[PhotoService] Error uploading photo:', error);
+        console.error('[PhotoService] Upload error stack:', error instanceof Error ? error.stack : 'No stack trace');
         throw new Error(`Failed to upload photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
       // 2. Get challenge points from database
+      console.log('[PhotoService] Getting challenge points from database...');
       const { data: challengeData, error: challengeError } = await supabase
         .from('challenges')
         .select('points')
         .eq('id', request.challengeId)
         .single();
 
-      if (challengeError) throw challengeError;
+      if (challengeError) {
+        console.error('[PhotoService] Error getting challenge data:', challengeError);
+        throw challengeError;
+      }
       const challengePoints = challengeData?.points || request.challengePoints;
+      console.log('[PhotoService] Challenge points:', challengePoints);
 
       // 3. Insert post into users_challenge table (this creates the post and completes the challenge)
+      console.log('[PhotoService] Inserting post into users_challenge table...');
       const { data: postData, error: postError } = await supabase
         .from('users_challenge')
         .insert({
@@ -254,11 +283,19 @@ export const photoService = {
         .select()
         .single();
 
-      if (postError) throw postError;
-      if (!postData) throw new Error('Failed to create post record');
+      if (postError) {
+        console.error('[PhotoService] Error inserting post:', postError);
+        throw postError;
+      }
+      if (!postData) {
+        console.error('[PhotoService] Post data is null after insert');
+        throw new Error('Failed to create post record');
+      }
+      console.log('[PhotoService] Post created successfully:', postData.id);
 
       // 4. Return the photo
       const photo = dbUsersChallengeToPhoto(postData, username, request.challengeTitle, challengePoints);
+      console.log('[PhotoService] Photo submission completed successfully');
       return photo;
     });
   },

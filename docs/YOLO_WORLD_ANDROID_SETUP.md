@@ -69,205 +69,118 @@ model.export(
 # Результат: yolov8s-worldv2-custom.tflite
 ```
 
-### Вариант B: Fine-tuning модели (опционально, для лучшей точности)
-
-```python
-from ultralytics import YOLO
-
-# Загрузить модель
-model = YOLO("yolov8s-world.pt")
-
-# Загрузить словарь
-with open("vocab.txt", "r") as f:
-    vocab = [line.strip() for line in f if line.strip()]
-
-model.set_classes(vocab)
-
-# Fine-tune на вашем датасете (если есть)
-# model.train(data="path/to/dataset.yaml", epochs=50, imgsz=640)
+**После экспорта переименуйте файл:**
+```bash
+# Переименовать экспортированный файл в нужное имя
+mv yolov8s-worldv2-custom.tflite yolov8s-worldv2_int8.tflite
 ```
 
 ---
 
-## Шаг 4: Экспорт в TFLite для Android
+## Шаг 4: Добавление модели в Android приложение
 
-### Вариант A: Экспорт с INT8 Quantization (рекомендуется для мобильных)
+После экспорта модели в TFLite формат, вам нужно добавить её в Android приложение:
 
-```python
-from ultralytics import YOLO
+### 4.1. Размещение файла модели
 
-# Загрузить модель с кастомным словарем
-model = YOLO("yolov8s-world-custom.pt")
+1. **Поместите файл модели в папку assets:**
+   ```
+   assets/models/yolov8s-worldv2_int8.tflite
+   ```
 
-# Экспорт в TFLite с INT8 quantization
-# Это уменьшит размер модели и ускорит инференс
-model.export(
-    format="tflite",
-    imgsz=640,          # Размер входного изображения
-    int8=True,          # INT8 quantization для мобильных
-    dynamic=False,      # Фиксированный размер входа (быстрее)
-)
+2. **Проверьте, что файл существует:**
+   ```bash
+   ls -lh assets/models/yolov8s-worldv2_int8.tflite
+   ```
+
+### 4.2. Копирование модели в Android assets (только для local build)
+
+Для локальной сборки Android приложения, модель нужно скопировать в Android assets после `prebuild`:
+
+**Вариант A: Автоматическое копирование (рекомендуется)**
+
+Expo автоматически скопирует файлы из `assets/` в Android assets при выполнении `expo prebuild`. Убедитесь, что в `app.json` есть:
+
+```json
+{
+  "expo": {
+    "assetBundlePatterns": ["**/*"]
+  }
+}
 ```
 
-**Результат:** `yolov8s-world-custom.tflite` (~10-20 MB в зависимости от размера модели)
+**Вариант B: Ручное копирование (если автоматическое не работает)**
 
-### Вариант B: Экспорт через ONNX (если нужен больший контроль)
+После выполнения `npx expo prebuild --platform android`:
 
-```python
-from ultralytics import YOLO
+**Windows (PowerShell):**
+```powershell
+# Создать папку models если её нет
+New-Item -ItemType Directory -Force -Path android\app\src\main\assets\models
 
-model = YOLO("yolov8s-world-custom.pt")
-
-# 1. Экспорт в ONNX
-model.export(
-    format="onnx",
-    imgsz=640,
-    simplify=True,
-    without_bbox_decoder=True,  # Отключить bbox decoder для TFLite
-)
-
-# 2. Конвертация ONNX → TFLite (требует onnx-tf или tensorflow)
-# Используйте TensorFlow Lite Converter
+# Скопировать файл модели
+Copy-Item assets\models\yolov8s-worldv2_int8.tflite android\app\src\main\assets\models\
 ```
 
----
+**Linux/Mac:**
+```bash
+# Создать папку models если её нет
+mkdir -p android/app/src/main/assets/models
 
-## Шаг 5: Интеграция в Android проект
+# Скопировать файл модели
+cp assets/models/yolov8s-worldv2_int8.tflite android/app/src/main/assets/models/
+```
 
-### 5.1. Переместить модель в проект
+### 4.3. Пересборка приложения
+
+⚠️ **ВАЖНО:** После добавления модели, обязательно пересоберите приложение:
 
 ```bash
-# Скопировать модель в assets/models/
-cp yolov8s-world-custom.tflite assets/models/yolo-world.tflite
+# Для локальной сборки
+npm run build:android:apk:debug
+# или
+npm run build:android:apk:release
+
+# Для EAS Build (автоматически копирует assets)
+npm run build:android
 ```
 
-### 5.2. Обновить код для загрузки YOLO-World модели
-
-```typescript
-// services/localAIService.ts
-
-// Вместо yolo.tflite загружаем yolo-world.tflite
-const modelPath = require('../../assets/models/yolo-world.tflite');
-const model = await TFLite.loadTensorflowModel(modelPath);
-```
-
-### 5.3. Обновить постобработку выхода
-
-YOLO-World возвращает похожий формат, но может быть немного другой:
-- Выход: `[1, num_detections, 85]` где 85 = 4 (bbox) + 1 (confidence) + 80 (class scores) ИЛИ
-- `[1, num_detections, 4 + len(vocab)]` для кастомного словаря (4 bbox + confidence для каждого класса)
-
-Нужно будет адаптировать `postprocessOutput()` под ваш формат.
+**Важно:** Простой перезапуск Metro bundler (reload) не достаточен - нужно полностью пересобрать APK!
 
 ---
 
-## Шаг 6: Обновить БД (не нужно маппинг!)
+## Шаг 5: Проверка работы
 
-**Преимущество YOLO-World:**
-- ❌ НЕ нужен `coco_classes` маппинг!
-- ✅ Модель распознает все 251 объект напрямую
-- ✅ Можно использовать `detectable_object` напрямую из БД
+После сборки и установки приложения:
 
-**Пример:**
-```sql
--- Вместо coco_classes маппинга
-UPDATE challenges SET
-  detectable_object = 'kettle',
-  coco_classes = NULL,  -- Не нужен!
-  local_ai_supported = true
-WHERE title LIKE '%kettle%';
-```
+1. Откройте приложение
+2. Перейдите в раздел Camera
+3. Если модель загружена правильно, вы не увидите сообщение об ошибке
+4. Если видите ошибку "AI model not found", проверьте:
+   - Файл существует в `assets/models/yolov8s-worldv2_int8.tflite`
+   - Приложение было пересобрано после добавления файла
+   - Файл скопирован в `android/app/src/main/assets/models/` (для local build)
 
 ---
 
-## Сравнение размеров моделей
+## Устранение проблем
 
-| Модель | Размер (FP32) | Размер (INT8) | Скорость | Точность |
-|--------|--------------|---------------|----------|----------|
-| YOLO-World-S | ~22 MB | ~10 MB | Очень быстро | Хорошая |
-| YOLO-World-M | ~50 MB | ~25 MB | Быстро | Лучше |
-| YOLO-World-L | ~90 MB | ~45 MB | Средне | Отлично |
-| YOLO-World-X | ~170 MB | ~85 MB | Медленно | Лучшая |
+### Ошибка: "AI model not found"
 
-**Рекомендация:** YOLO-World-S (nano) или YOLO-World-M для Android.
+**Решение:**
+1. Убедитесь, что файл находится в `assets/models/yolov8s-worldv2_int8.tflite`
+2. Для локальной сборки: проверьте наличие файла в `android/app/src/main/assets/models/`
+3. Пересоберите приложение (не просто перезапустите Metro)
+4. Очистите кеш Metro: `npx expo start --clear`
 
----
+### Ошибка: "TensorFlow Lite native module not available"
 
-## Производительность
+**Решение:**
+- Это означает, что вы используете Expo Go. Local AI требует development или production build
+- Выполните: `npm run build:android:local` или `npm run build:android:apk:debug`
 
-**На Android (среднее устройство):**
-- YOLO-World-S (INT8): ~100-200ms на изображение 640x640
-- YOLO-World-M (INT8): ~200-400ms на изображение 640x640
+### Модель слишком большая
 
-**Сравнение с текущим YOLOv8n (COCO):**
-- Текущий: 80 классов COCO
-- YOLO-World: 251 ваш класс напрямую
-- Скорость: Примерно такая же или немного медленнее (~20-30%)
-
----
-
-## Ограничения
-
-1. **Словарь запекается в модель:**
-   - После reparameterization и quantization словарь фиксирован
-   - Чтобы добавить новый объект, нужно переэкспортировать модель
-
-2. **Размер словаря влияет на размер модели:**
-   - Больше классов = больше выходной размер
-   - 251 класс это приемлемо для YOLO-World
-
-3. **Точность может варьироваться:**
-   - Некоторые объекты могут быть менее точными чем в COCO
-   - Рекомендуется fine-tuning на вашем датасете
-
----
-
-## Альтернативный подход: Использование через API (если нужна гибкость)
-
-Если нужно менять словарь динамически, можно использовать YOLO-World через API (Roboflow):
-
-```typescript
-// Использование через Supabase Edge Function
-// supabase/functions/verify-photo/index-yoloworld.ts
-// Уже реализовано в вашем проекте!
-```
-
-**Плюсы API:**
-- ✅ Можно менять словарь динамически
-- ✅ Не нужно переэкспортировать модель
-- ✅ Всегда последняя версия модели
-
-**Минусы:**
-- ❌ Требует интернет
-- ❌ Задержка сети (~500-1000ms)
-- ❌ Зависит от сервиса
-
----
-
-## Рекомендация
-
-**Для вашего случая (251 объект из vocab.txt):**
-
-✅ **Используйте YOLO-World-S или YOLO-World-M с репараметризацией:**
-1. Запекайте все 251 объект в модель
-2. Экспортируйте в TFLite (INT8)
-3. Используйте локально на Android
-4. Уберите `coco_classes` маппинг из БД
-
-**Размер модели будет:**
-- YOLO-World-S: ~10-12 MB (INT8)
-- YOLO-World-M: ~25-30 MB (INT8)
-
-**Это приемлемо для Android приложения!**
-
----
-
-## Следующие шаги
-
-1. Экспортировать YOLO-World с вашим vocab.txt
-2. Заменить `yolo.tflite` на `yolo-world.tflite` в проекте
-3. Обновить `postprocessOutput()` под формат YOLO-World
-4. Убрать `coco_classes` маппинг из БД (больше не нужен!)
-5. Тестировать на реальных устройствах
-
-Нужна помощь с экспортом модели или интеграцией в код?
+Файл модели может быть большим (обычно 20-40 MB). Это нормально. Убедитесь, что:
+- Файл не добавлен в `.gitignore` (если нужен в репозитории)
+- Или файл игнорируется git, но пользователи должны скачать его отдельно

@@ -31,18 +31,18 @@ export default function AccountDeletionScreen() {
     }
     setIsDeleting(true);
     try {
-      console.log('Starting account deletion...');
+      console.log('[AccountDeletion] Starting account deletion...');
       const result = await deleteAccount();
-      console.log('Delete account result:', result);
+      console.log('[AccountDeletion] Delete account result:', result);
       if (result.success) {
         // Navigate to login/home screen after successful deletion
         router.replace('/(tabs)/profile');
       } else {
-        console.error('Delete account failed:', result.error);
+        console.error('[AccountDeletion] Delete account failed:', result.error);
         setIsDeleting(false);
       }
     } catch (error) {
-      console.error('Delete account error:', error);
+      console.error('[AccountDeletion] Delete account error:', error);
       setIsDeleting(false);
     }
   };

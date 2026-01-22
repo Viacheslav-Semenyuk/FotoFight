@@ -207,24 +207,24 @@ export default function ProfileScreen() {
 
   const performRemoveAvatar = async () => {
     if (!authUser) {
-      console.error('performRemoveAvatar: authUser is null');
+      console.error('[Profile] performRemoveAvatar: authUser is null');
       return;
     }
     
-    console.log('performRemoveAvatar: starting removal for user', authUser.id);
+    console.log('[Profile] performRemoveAvatar: starting removal for user', authUser.id);
     setIsUpdatingAvatar(true);
     try {
       const response = await userService.removeAvatar(authUser.id);
-      console.log('performRemoveAvatar: response received', response);
+      console.log('[Profile] performRemoveAvatar: response received', response);
       if (response.success && response.data) {
         setUser(response.data);
         Alert.alert('Success', 'Avatar removed successfully!');
       } else {
-        console.error('performRemoveAvatar: failed', response.error);
+        console.error('[Profile] performRemoveAvatar: failed', response.error);
         Alert.alert('Error', response.error || 'Failed to remove avatar');
       }
     } catch (error) {
-      console.error('Error removing avatar:', error);
+      console.error('[Profile] Error removing avatar:', error);
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to remove avatar');
     } finally {
       setIsUpdatingAvatar(false);

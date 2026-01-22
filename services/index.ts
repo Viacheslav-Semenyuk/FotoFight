@@ -6,6 +6,7 @@ export { photoService, VerificationResult, SubmitPhotoRequest } from './photoSer
 export { authService, AuthResponse } from './authService';
 export { verifyPhotoLocally, isLocalAIAvailable } from './localAIService';
 export { preprocessImageForYOLO, imageUriToBase64, MODEL_INPUT_SIZE } from './imagePreprocessor';
+export { loggerService, LogEntry } from './loggerService';
 
 // Supabase client and types
 export { supabase, DbUser, DbChallenge, DbPhoto, DbUsersChallenge, User, Challenge, Photo, Post } from './supabase';
