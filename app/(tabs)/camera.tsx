@@ -244,7 +244,17 @@ export default function CameraScreen() {
   };
 
   const toggleCameraFacing = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
+    if (isWeb) {
+      // On web, we need to temporarily deactivate camera to force reinitialization
+      setIsCameraActive(false);
+      setFacing(current => (current === 'back' ? 'front' : 'back'));
+      // Reactivate camera after a short delay to allow facing change to take effect
+      setTimeout(() => {
+        setIsCameraActive(true);
+      }, 100);
+    } else {
+      setFacing(current => (current === 'back' ? 'front' : 'back'));
+    }
   };
 
   const toggleFlash = () => {
@@ -740,6 +750,7 @@ export default function CameraScreen() {
       <View style={[styles.cameraWrapper, centerContent && styles.cameraWrapperDesktop]}>
         {isCameraActive ? (
           <CameraView
+            key={isWeb ? `camera-${facing}` : undefined}
             ref={cameraRef}
             style={styles.cameraView}
             facing={facing}
