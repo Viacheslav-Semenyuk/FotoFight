@@ -423,9 +423,8 @@ export default function CameraScreen() {
             setPhotoAspectRatio(4/3); // Default webcam aspect ratio
           });
         }
-        // On web, webcams are typically front-facing and browser mirrors the preview
-        // On native, mirror only if using front camera
-        setPhotoMirrored(isWeb || facing === 'front');
+        // Mirror only if using front camera (for both web and native)
+        setPhotoMirrored(facing === 'front');
       }
       // Silently fail if photo is invalid
     } catch (error) {
