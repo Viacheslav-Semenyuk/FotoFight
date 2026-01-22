@@ -118,12 +118,15 @@ export default function CameraScreen() {
     capturedPhotoRef.current = capturedPhoto;
   }, [capturedPhoto]);
 
-  // Force camera remount on web when facing changes and camera is active
+  // Force camera remount on web when facing changes (only when camera becomes active)
+  const prevFacingRef = useRef(facing);
   useEffect(() => {
-    if (isWeb && isCameraActive && cameraKey > 0) {
-      // Key will be incremented by toggleCameraFacing, this ensures remount happens
+    if (isWeb && isCameraActive && prevFacingRef.current !== facing) {
+      // Camera facing changed, force remount
+      setCameraKey(prev => prev + 1);
+      prevFacingRef.current = facing;
     }
-  }, [facing, isWeb, isCameraActive, cameraKey]);
+  }, [facing, isWeb, isCameraActive]);
 
   // Control camera activation based on screen focus
   useFocusEffect(
@@ -257,18 +260,35 @@ export default function CameraScreen() {
       return;
     }
 
-    // Web: полностью остановить камеру
+    // Web: известная проблема - expo-camera не поддерживает переключение камеры на веб
+    // Пробуем максимально агрессивный подход с полным пересозданием компонента
+    console.log('Switching camera on web, current facing:', facing);
+    
+    // Полностью остановить камеру
     setIsCameraActive(false);
+    setIsCapturing(false);
+    
+    // Сбросить ref
+    if (cameraRef.current) {
+      cameraRef.current = null;
+    }
 
+    // Увеличиваем задержки для мобильных браузеров (особенно iOS Safari)
     setTimeout(() => {
       // Смена facing
-      setFacing(current => (current === 'back' ? 'front' : 'back'));
-      // Форсировать ремонт
-      setCameraKey(prev => prev + 1);
+      const newFacing = facing === 'back' ? 'front' : 'back';
+      console.log('Setting new facing:', newFacing);
+      setFacing(newFacing);
+      
+      // Форсировать ремонт с новым key (увеличиваем значительно)
+      setCameraKey(prev => prev + 10); // Большой скачок для гарантированного пересоздания
 
-      // Реактивировать камеру с задержкой (увеличено до 500ms для стабильности на iOS Safari)
-      setTimeout(() => setIsCameraActive(true), 500);
-    }, 200);
+      // Реактивировать камеру с большой задержкой для мобильных браузеров
+      setTimeout(() => {
+        console.log('Reactivating camera with facing:', newFacing);
+        setIsCameraActive(true);
+      }, 1000); // Увеличено до 1000ms для мобильных браузеров
+    }, 500); // Увеличено до 500ms для полной остановки камеры
   };
 
   const toggleFlash = () => {
@@ -848,11 +868,7 @@ export default function CameraScreen() {
             )}
           </Pressable>
           {!(isDesktop && isWeb) && (
-            Platform.OS === 'android' ? (
-              <View style={styles.flipButtonPlaceholder} />
-            ) : (
-              <View style={styles.flipButtonPlaceholder} />
-            )
+            <View style={styles.flipButtonPlaceholder} />
           )}
         </View>
       </View>
