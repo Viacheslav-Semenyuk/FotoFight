@@ -62,6 +62,7 @@ export default function CameraScreen() {
   const dropdownRef = useRef<View>(null);
   const isTogglingRef = useRef(false);
   const isUpdatingFromDropdownRef = useRef(false);
+  const isGettingStreamRef = useRef(false);
   
   // Web-specific: MediaDevices API
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -73,6 +74,14 @@ export default function CameraScreen() {
     if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices) {
       return null;
     }
+
+    // Prevent concurrent calls
+    if (isGettingStreamRef.current) {
+      console.log('Camera stream is already being loaded, skipping...');
+      return null;
+    }
+
+    isGettingStreamRef.current = true;
 
     try {
       // Stop existing stream
@@ -166,15 +175,23 @@ export default function CameraScreen() {
         // Set new stream
         videoRef.current.srcObject = stream;
         
-        // Play with error handling for AbortError
-        try {
-          await videoRef.current.play();
-        } catch (error: any) {
-          // Ignore AbortError - it happens when stream is changed quickly
-          if (error.name !== 'AbortError') {
-            console.error('Error playing video:', error);
-            throw error;
-          }
+        // Small delay to let browser process the new stream before playing
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Play with proper Promise handling (following Chrome recommendations)
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              // Video playback started successfully
+            })
+            .catch((error: any) => {
+              // Ignore AbortError - it happens when stream is changed quickly
+              // This is expected behavior when switching cameras/flash
+              if (error.name !== 'AbortError' && error.name !== 'NotAllowedError') {
+                console.error('Error playing video:', error);
+              }
+            });
         }
       }
 
@@ -182,6 +199,9 @@ export default function CameraScreen() {
     } catch (error) {
       console.error('Error accessing camera:', error);
       return null;
+    } finally {
+      // Always reset the flag, even if there was an error
+      isGettingStreamRef.current = false;
     }
   }, []);
 

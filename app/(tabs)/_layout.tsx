@@ -1,22 +1,15 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, View, StyleSheet, Platform } from 'react-native';
 import { useResponsive } from '../../hooks/useResponsive';
 import Sidebar from '../../components/Sidebar';
-import { useAuth } from '../../contexts/AuthContext';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { isDesktop, isTablet, width } = useResponsive();
   const showSidebar = isDesktop || isTablet;
   const isSmallScreen = width < 380;
-  const { user: authUser } = useAuth();
-  const router = useRouter();
-  
-  const handleSettingsPress = () => {
-    router.push('/(tabs)/settings');
-  };
 
   return (
     <View style={styles.container}>
@@ -54,8 +47,8 @@ export default function TabsLayout() {
               fontSize: 10,
               fontWeight: '500',
             },
-            // Hide header on desktop/tablet (we have sidebar logo)
-            headerShown: !showSidebar,
+            // Hide header completely (mobile and desktop/tablet)
+            headerShown: false,
           }}
         >
           <Tabs.Screen
@@ -134,20 +127,6 @@ export default function TabsLayout() {
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="person" size={size} color={color} />
               ),
-              headerRight: () => {
-                // Only show settings in mobile header if user is authenticated
-                if (!authUser || showSidebar) {
-                  return null;
-                }
-                return (
-                  <Pressable
-                    style={{ marginRight: 16, padding: 4 }}
-                    onPress={handleSettingsPress}
-                  >
-                    <Ionicons name="settings-outline" size={24} color="#fff" />
-                  </Pressable>
-                );
-              },
             }}
           />
           <Tabs.Screen

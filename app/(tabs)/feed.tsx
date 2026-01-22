@@ -1,17 +1,13 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   Pressable,
-  Animated,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { photoService, Post } from '../../services';
@@ -20,20 +16,13 @@ import { useResponsive, CONTENT_MAX_WIDTH } from '../../hooks/useResponsive';
 import FeedImage from '../../components/FeedImage';
 import Avatar from '../../components/Avatar';
 
-const HEADER_HEIGHT = 56;
-
 export default function FeedScreen() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
-  const insets = useSafeAreaInsets();
   const { user: authUser } = useAuth();
-  
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const lastScrollY = useRef(0);
-  const headerTranslateY = useRef(new Animated.Value(0)).current;
 
   // Reload posts every time feed comes into focus
   useFocusEffect(
@@ -50,37 +39,6 @@ export default function FeedScreen() {
     }, [])
   );
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const currentScrollY = event.nativeEvent.contentOffset.y;
-    const diff = currentScrollY - lastScrollY.current;
-    
-    if (currentScrollY > 10) {
-      if (diff > 0) {
-        // Scrolling down - hide header
-        Animated.timing(headerTranslateY, {
-          toValue: -(HEADER_HEIGHT + insets.top),
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      } else if (diff < -5) {
-        // Scrolling up - show header
-        Animated.timing(headerTranslateY, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      }
-    } else {
-      // At top - always show header
-      Animated.timing(headerTranslateY, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-    
-    lastScrollY.current = currentScrollY;
-  };
 
   const formatTime = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -147,26 +105,9 @@ export default function FeedScreen() {
   if (posts.length === 0) {
     return (
       <View style={styles.container}>
-        {/* Custom Animated Header */}
-        {!centerContent && (
-          <Animated.View
-            style={[
-              styles.customHeader,
-              {
-                paddingTop: insets.top,
-                height: HEADER_HEIGHT + insets.top,
-                transform: [{ translateY: headerTranslateY }],
-              },
-            ]}
-          >
-            <Text style={styles.headerTitle}>Foto Fight</Text>
-          </Animated.View>
-        )}
-        
         <View style={[
           styles.emptyContainer,
           centerContent && styles.emptyContainerDesktop,
-          !centerContent && { paddingTop: HEADER_HEIGHT + insets.top },
         ]}>
           <Ionicons name="images-outline" size={64} color="#ccc" />
           <Text style={styles.emptyTitle}>Feed is empty</Text>
@@ -197,32 +138,13 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Custom Animated Header */}
-      <Animated.View
-        style={[
-          styles.customHeader,
-          {
-            paddingTop: insets.top,
-            height: HEADER_HEIGHT + insets.top,
-            transform: [{ translateY: headerTranslateY }],
-          },
-        ]}
-      >
-        <Text style={styles.headerTitle}>Foto Fight</Text>
-      </Animated.View>
-
       <FlatList
         data={posts}
         renderItem={renderPost}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.list,
-          { paddingTop: HEADER_HEIGHT + insets.top },
-        ]}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         style={styles.flatList}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
       />
     </View>
   );
@@ -261,21 +183,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8e8e8e',
     textAlign: 'center',
-  },
-  customHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   flatList: {
     width: '100%',

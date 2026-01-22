@@ -401,10 +401,10 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
-          {/* Settings button only for desktop/tablet (mobile uses headerRight in tabs layout) */}
-          {authUser && centerContent && (
+          {/* Settings button for all screen sizes */}
+          {authUser && (
             <Pressable style={styles.signOutButton} onPress={() => router.push('/(tabs)/settings')}>
-              <Ionicons name="settings-outline" size={24} color="#666" />
+              <Ionicons name="settings-outline" size={24} color={centerContent ? "#666" : "#262626"} />
             </Pressable>
           )}
         </View>
