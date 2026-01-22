@@ -6,7 +6,7 @@ import { challengeService } from './challengeService';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { EncodingType } from 'expo-file-system';
-import { verifyPhotoLocally, isLocalAIAvailable } from './localAIService';
+import { verifyPhotoLocally, isLocalAIAvailable, ChallengeData } from './localAIService';
 
 export interface VerificationResult {
   success: boolean;
@@ -168,34 +168,90 @@ export const photoService = {
     }
   },
 
-  // Verify photo with AI - uses ONLY local AI (no server fallback)
-  // challengeData should contain detectable_object from database
+  // Verify photo with AI
+  // - Native Android: uses Local AI (TensorFlow Lite)
+  // - Web (including Android web): uses Supabase Edge Function (Roboflow YOLO-World)
+  // challengeData should contain detectable_object from database (used for Local AI only)
   verifyPhotoWithAI: async (
     photoUri: string, 
     challengeTitle: string,
     challengeData?: { detectable_object?: string | null }
   ): Promise<ApiResponse<VerificationResult>> => {
     return apiCall(async () => {
-      // Use local AI verification (Android only)
-      if (!isLocalAIAvailable()) {
-        throw new Error('Local AI verification is only available on Android. Please use an Android device.');
+      // For web (including Android web), use Supabase Edge Function
+      if (Platform.OS === 'web') {
+        try {
+          console.log('Using Supabase Edge Function for web verification...');
+          
+          // Convert photo to base64
+          const photoBase64 = await photoService.uriToBase64(photoUri);
+          
+          // Call Supabase Edge Function (Roboflow YOLO-World)
+          const { data, error } = await supabase.functions.invoke('verify-photo', {
+            body: {
+              photoBase64,
+              challengeTitle,
+            },
+          });
+
+          if (error) {
+            console.error('Edge Function error:', error);
+            throw new Error(`Photo verification failed: ${error.message || 'Unknown error'}`);
+          }
+
+          if (!data) {
+            throw new Error('No response from Edge Function');
+          }
+
+          console.log('Edge Function verification result:', data);
+          
+          // Handle both success and error responses
+          if (data.success === false) {
+            throw new Error(data.error || 'Photo verification failed');
+          }
+          
+          // Build message based on verification result
+          const message = data.verified
+            ? `Photo verified! Object "${data.objectToDetect || 'object'}" detected with confidence ${(data.relevantMaxConfidence || data.maxConfidence || 0).toFixed(2)}.`
+            : `Photo verification failed. Object "${data.objectToDetect || 'object'}" not found in the image. Please try again with a clearer photo.`;
+          
+          return {
+            success: data.success === true,
+            message,
+            verified: data.verified === true,
+          };
+        } catch (error) {
+          console.error('Edge Function verification error:', error);
+          throw new Error(`Photo verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // For native Android, use Local AI
+      if (isLocalAIAvailable()) {
+        try {
+          console.log('Using local AI verification for native Android...');
+          // Build ChallengeData object with title and detectable_object
+          const localChallengeData: ChallengeData | undefined = challengeData ? {
+            title: challengeTitle,
+            detectable_object: challengeData.detectable_object ?? null,
+          } : undefined;
+          const localResult = await verifyPhotoLocally(photoUri, challengeTitle, localChallengeData);
+          
+          // Return the result (even if verification failed, we don't fall back to server)
+          console.log('Local AI verification result:', localResult);
+          return {
+            success: localResult.success && localResult.verified,
+            message: localResult.message,
+            verified: localResult.verified,
+          };
+        } catch (error) {
+          console.error('Local AI verification error:', error);
+          throw new Error(`Local AI verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       }
 
-      try {
-        console.log('Using local AI verification (no server fallback)...');
-        const localResult = await verifyPhotoLocally(photoUri, challengeTitle, challengeData);
-        
-        // Return the result (even if verification failed, we don't fall back to server)
-        console.log('Local AI verification result:', localResult);
-        return {
-          success: localResult.success && localResult.verified,
-          message: localResult.message,
-          verified: localResult.verified,
-        };
-      } catch (error) {
-        console.error('Local AI verification error:', error);
-        throw new Error(`Local AI verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+      // Fallback: if neither web nor Android native, throw error
+      throw new Error('AI verification is only available on Android native app or web. Please use one of these platforms.');
     });
   },
 
