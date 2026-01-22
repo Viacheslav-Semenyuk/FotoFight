@@ -54,7 +54,7 @@ export default function ChallengesScreen() {
           </Text>
           {item.completedCount > 0 && (
             <Text style={styles.completedByText}>
-              {item.completedCount} {item.completedCount === 1 ? 'completion' : 'completions'}
+              {item.completedCount} {item.completedCount === 1 ? 'user' : 'users'} completed the challenge
             </Text>
           )}
         </View>
