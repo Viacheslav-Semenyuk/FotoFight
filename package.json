@@ -14,7 +14,9 @@
                     "build:android:dev":  "eas build --platform android --profile development",
                     "build:android:local":  "npx expo prebuild --platform android \u0026\u0026 npx expo run:android",
                     "prebuild:android":  "npx expo prebuild --platform android --clean",
-                    "build:web":  "npx expo export -p web"
+                    "build:web":  "npx expo export -p web",
+                    "lint":  "eslint . --ext .ts,.tsx",
+                    "lint:fix":  "eslint . --ext .ts,.tsx --fix"
                 },
     "dependencies":  {
                          "@expo/metro-runtime":  "~3.2.3",
@@ -51,6 +53,10 @@
     "devDependencies":  {
                             "@babel/core":  "^7.20.0",
                             "@types/react":  "~18.2.79",
+                            "@typescript-eslint/eslint-plugin":  "^7.0.0",
+                            "@typescript-eslint/parser":  "^7.0.0",
+                            "eslint":  "^8.57.0",
+                            "eslint-config-expo":  "^7.1.0",
                             "sharp":  "0.34.5"
                         },
     "private":  true

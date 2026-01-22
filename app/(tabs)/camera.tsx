@@ -69,7 +69,7 @@ export default function CameraScreen() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Web: Get camera stream using MediaDevices API
-  const getCameraStream = useCallback(async (facingMode: 'front' | 'back') => {
+  const getCameraStream = useCallback(async (facingMode: 'front' | 'back', flash: 'off' | 'on' | 'auto' = 'off') => {
     if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices) {
       return null;
     }
@@ -77,7 +77,7 @@ export default function CameraScreen() {
     try {
       // Stop existing stream
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
         streamRef.current = null;
       }
 
@@ -87,6 +87,8 @@ export default function CameraScreen() {
       
       // Find device with matching facing mode
       let targetDeviceId: string | null = null;
+      let targetTrack: MediaStreamTrack | null = null;
+      
       for (const device of videoDevices) {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { deviceId: { exact: device.deviceId } }
@@ -96,26 +98,58 @@ export default function CameraScreen() {
         
         // Check if this device matches the facing mode we want
         if (capabilities.facingMode && capabilities.facingMode.includes(facingMode === 'front' ? 'user' : 'environment')) {
+          stream.getTracks().forEach((t: MediaStreamTrack) => {
+            if (t !== track) t.stop();
+          });
+          targetDeviceId = device.deviceId;
+          targetTrack = track;
+          break;
+        }
         stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-        targetDeviceId = device.deviceId;
-        break;
-      }
-      stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
       }
 
       // Get stream with preferred facing mode or device
+      const videoConstraints: MediaTrackConstraints = targetDeviceId
+        ? { deviceId: { exact: targetDeviceId } }
+        : {
+            facingMode: facingMode === 'front' ? 'user' : 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          };
+
+      // Add torch (flash) support for back camera
+      if (facingMode === 'back' && flash === 'on') {
+        // @ts-ignore - torch is experimental but supported in some browsers
+        videoConstraints.torch = true;
+      }
+
       const constraints: MediaStreamConstraints = {
-        video: targetDeviceId
-          ? { deviceId: { exact: targetDeviceId } }
-          : {
-              facingMode: facingMode === 'front' ? 'user' : 'environment',
-              width: { ideal: 1920 },
-              height: { ideal: 1080 }
-            }
+        video: videoConstraints
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
+
+      // Apply torch if supported and needed
+      if (targetTrack || stream.getVideoTracks().length > 0) {
+        const videoTrack = targetTrack || stream.getVideoTracks()[0];
+        const capabilities = videoTrack.getCapabilities();
+        
+        // @ts-ignore - torch is experimental but supported in some browsers
+        if ((capabilities as any).torch && facingMode === 'back') {
+          try {
+            if (flash === 'on') {
+              // @ts-ignore - torch is experimental
+              await videoTrack.applyConstraints({ advanced: [{ torch: true }] as any });
+            } else if (flash === 'off') {
+              // @ts-ignore - torch is experimental
+              await videoTrack.applyConstraints({ advanced: [{ torch: false }] as any });
+            }
+          } catch (error) {
+            console.log('Torch not supported or failed to apply:', error);
+          }
+        }
+      }
 
       // Set stream to video element
       if (videoRef.current) {
@@ -243,8 +277,8 @@ export default function CameraScreen() {
     if (Platform.OS !== 'web') return;
 
     if (isCameraActive && permission?.granted) {
-      // Start camera stream
-      getCameraStream(facing);
+      // Start camera stream with current flash mode
+      getCameraStream(facing, flashMode);
     } else {
       // Stop camera stream
       stopCameraStream();
@@ -254,7 +288,7 @@ export default function CameraScreen() {
     return () => {
       stopCameraStream();
     };
-  }, [isCameraActive, facing, permission?.granted, isWeb, getCameraStream, stopCameraStream]);
+  }, [isCameraActive, facing, flashMode, permission?.granted, getCameraStream, stopCameraStream]);
 
   // Control camera activation based on screen focus
   useFocusEffect(
@@ -403,7 +437,7 @@ export default function CameraScreen() {
 
   const toggleCameraFacing = async () => {
     if (!isWeb) {
-      setFacing(current => (current === 'back' ? 'front' : 'back'));
+      setFacing((current: 'front' | 'back') => (current === 'back' ? 'front' : 'back'));
       return;
     }
 
@@ -417,18 +451,28 @@ export default function CameraScreen() {
     // Update facing state
     setFacing(newFacing);
     
-    // Get new stream with new facing mode
+    // Get new stream with new facing mode and current flash mode
     if (isCameraActive) {
-      await getCameraStream(newFacing);
+      await getCameraStream(newFacing, flashMode);
     }
   };
 
-  const toggleFlash = () => {
-    setFlashMode(current => {
-      if (current === 'off') return 'on';
-      if (current === 'on') return 'auto';
-      return 'off';
-    });
+  const toggleFlash = async () => {
+    const newFlashMode = flashMode === 'off' ? 'on' : flashMode === 'on' ? 'auto' : 'off';
+    
+    if (isWeb && isCameraActive) {
+      // Web: Update flash mode and restart stream
+      setFlashMode(newFlashMode);
+      
+      // Restart stream with new flash mode (only for back camera)
+      if (facing === 'back') {
+        await getCameraStream(facing, newFlashMode);
+      }
+      // Front camera doesn't support flash, state is already updated
+    } else {
+      // Native: Just update state
+      setFlashMode(newFlashMode);
+    }
   };
 
   const handleRetake = () => {
@@ -457,7 +501,7 @@ export default function CameraScreen() {
 
   const handleToggleDropdown = () => {
     isTogglingRef.current = true;
-    setShowChallengeDropdown(prev => !prev);
+    setShowChallengeDropdown((prev: boolean) => !prev);
     // Reset flag after state update
     setTimeout(() => {
       isTogglingRef.current = false;
@@ -483,7 +527,7 @@ export default function CameraScreen() {
     const items: Challenge[] = [];
     
     // Add selected challenge first if it's not in uncompletedChallenges
-    if (selectedChallenge && !uncompletedChallenges.find(c => c.id === selectedChallenge.id)) {
+    if (selectedChallenge && !uncompletedChallenges.find((c: Challenge) => c.id === selectedChallenge.id)) {
       items.push(selectedChallenge);
     }
     
@@ -498,7 +542,7 @@ export default function CameraScreen() {
     const isSelected = selectedChallenge?.id === item.id;
     return (
       <Pressable
-        style={({ pressed }) => [
+        style={({ pressed }: PressableStateCallbackType) => [
           styles.dropdownItem,
           isSelected && styles.dropdownItemSelected,
           pressed && styles.dropdownItemPressed
@@ -717,7 +761,7 @@ export default function CameraScreen() {
                         <FlatList
                           data={dropdownChallenges}
                           renderItem={renderDropdownItem}
-                          keyExtractor={(item) => item.id}
+                          keyExtractor={(item: Challenge) => item.id}
                           style={styles.dropdownScroll}
                           nestedScrollEnabled={true}
                           scrollEnabled={true}
@@ -980,7 +1024,7 @@ export default function CameraScreen() {
         <View style={[styles.cameraControls, centerContent && styles.cameraControlsDesktop]}>
           {!(isDesktop && isWeb) && (
             <>
-              {Platform.OS === 'android' && (
+              {(Platform.OS === 'android' || (isWeb && facing === 'back')) && (
                 <Pressable
                   style={styles.flashButton}
                   onPress={toggleFlash}
