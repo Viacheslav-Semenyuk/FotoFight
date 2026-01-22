@@ -62,6 +62,125 @@ export default function CameraScreen() {
   const dropdownRef = useRef<View>(null);
   const isTogglingRef = useRef(false);
   const isUpdatingFromDropdownRef = useRef(false);
+  
+  // Web-specific: MediaDevices API
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Web: Get camera stream using MediaDevices API
+  const getCameraStream = useCallback(async (facingMode: 'front' | 'back') => {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices) {
+      return null;
+    }
+
+    try {
+      // Stop existing stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+
+      // Get available devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      
+      // Find device with matching facing mode
+      let targetDeviceId: string | null = null;
+      for (const device of videoDevices) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: device.deviceId } }
+        });
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        // Check if this device matches the facing mode we want
+        if (capabilities.facingMode && capabilities.facingMode.includes(facingMode === 'front' ? 'user' : 'environment')) {
+        stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+        targetDeviceId = device.deviceId;
+        break;
+      }
+      stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+      }
+
+      // Get stream with preferred facing mode or device
+      const constraints: MediaStreamConstraints = {
+        video: targetDeviceId
+          ? { deviceId: { exact: targetDeviceId } }
+          : {
+              facingMode: facingMode === 'front' ? 'user' : 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            }
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      // Set stream to video element
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      return stream;
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      return null;
+    }
+  }, []);
+
+  // Web: Stop camera stream
+  const stopCameraStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  // Web: Capture photo from video stream
+  const capturePhotoFromStream = useCallback(async (): Promise<string | null> => {
+    if (Platform.OS !== 'web' || !videoRef.current || !canvasRef.current) {
+      return null;
+    }
+
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw video frame to canvas
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert canvas to blob, then to data URL
+      return new Promise((resolve) => {
+        canvas.toBlob((blob: Blob | null) => {
+          if (blob) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(reader.result as string);
+            };
+            reader.readAsDataURL(blob);
+          } else {
+            resolve(null);
+          }
+        }, 'image/jpeg', 0.95);
+      });
+    } catch (error) {
+      console.error('Error capturing photo:', error);
+      return null;
+    }
+  }, []);
+
   const { isDesktop, isTablet } = useResponsive();
   const centerContent = isDesktop || isTablet;
   const isWeb = Platform.OS === 'web';
@@ -119,15 +238,23 @@ export default function CameraScreen() {
     capturedPhotoRef.current = capturedPhoto;
   }, [capturedPhoto]);
 
-  // Force camera remount on web when facing changes (only when camera becomes active)
-  const prevFacingRef = useRef(facing);
+  // Web: Manage camera stream lifecycle
   useEffect(() => {
-    if (isWeb && isCameraActive && prevFacingRef.current !== facing) {
-      // Camera facing changed, force remount
-      setCameraKey(prev => prev + 1);
-      prevFacingRef.current = facing;
+    if (Platform.OS !== 'web') return;
+
+    if (isCameraActive && permission?.granted) {
+      // Start camera stream
+      getCameraStream(facing);
+    } else {
+      // Stop camera stream
+      stopCameraStream();
     }
-  }, [facing, isWeb, isCameraActive]);
+
+    // Cleanup on unmount
+    return () => {
+      stopCameraStream();
+    };
+  }, [isCameraActive, facing, permission?.granted, isWeb, getCameraStream, stopCameraStream]);
 
   // Control camera activation based on screen focus
   useFocusEffect(
@@ -200,22 +327,41 @@ export default function CameraScreen() {
       return;
     }
 
-    // Check if camera ref is available (with a small delay to allow camera to initialize)
-    if (!cameraRef.current) {
-      // Give camera a moment to initialize after retake
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // Silently return if camera is still not ready
-      if (!cameraRef.current) {
-        return;
-      }
-    }
-
     setIsCapturing(true);
     
     try {
-      const photo = await cameraRef.current.takePictureAsync();
-      if (photo && photo.uri) {
-        setCapturedPhoto(photo.uri);
+      let photoUri: string | null = null;
+      let photoWidth: number | undefined;
+      let photoHeight: number | undefined;
+
+      if (isWeb) {
+        // Web: Use MediaDevices API capture
+        photoUri = await capturePhotoFromStream();
+        if (photoUri && videoRef.current) {
+          photoWidth = videoRef.current.videoWidth;
+          photoHeight = videoRef.current.videoHeight;
+        }
+      } else {
+        // Native: Use expo-camera
+        // Check if camera ref is available (with a small delay to allow camera to initialize)
+        if (!cameraRef.current) {
+          // Give camera a moment to initialize after retake
+          await new Promise(resolve => setTimeout(resolve, 100));
+          // Silently return if camera is still not ready
+          if (!cameraRef.current) {
+            return;
+          }
+        }
+        const photo = await cameraRef.current.takePictureAsync();
+        if (photo && photo.uri) {
+          photoUri = photo.uri;
+          photoWidth = photo.width;
+          photoHeight = photo.height;
+        }
+      }
+
+      if (photoUri) {
+        setCapturedPhoto(photoUri);
         // Don't clear selected challenge when taking a photo if there's a preselectedChallengeId
         // It should remain selected so user can submit the photo for that challenge
         const hasPreselected = preselectedChallengeId && typeof preselectedChallengeId === 'string' && preselectedChallengeId.trim() !== '';
@@ -233,11 +379,11 @@ export default function CameraScreen() {
           }
         }
         // Calculate aspect ratio from photo dimensions
-        if (photo.width && photo.height) {
-          setPhotoAspectRatio(photo.width / photo.height);
+        if (photoWidth && photoHeight) {
+          setPhotoAspectRatio(photoWidth / photoHeight);
         } else {
           // Fallback: load image to get dimensions (for web)
-          Image.getSize(photo.uri, (width, height) => {
+          Image.getSize(photoUri, (width, height) => {
             setPhotoAspectRatio(width / height);
           }, () => {
             setPhotoAspectRatio(4/3); // Default webcam aspect ratio
@@ -255,43 +401,26 @@ export default function CameraScreen() {
     }
   };
 
-  const toggleCameraFacing = () => {
+  const toggleCameraFacing = async () => {
     if (!isWeb) {
       setFacing(current => (current === 'back' ? 'front' : 'back'));
       return;
     }
 
-    // Web: известная проблема - expo-camera не поддерживает переключение камеры на веб
-    // Используем максимально агрессивный подход: полностью удаляем компонент из DOM
-    console.log('Switching camera on web, current facing:', facing);
+    // Web: Use MediaDevices API for camera switching
+    const newFacing = facing === 'back' ? 'front' : 'back';
+    console.log('Switching camera on web, from', facing, 'to', newFacing);
     
-    // Полностью остановить камеру и принудительно удалить из DOM
-    setIsCameraActive(false);
-    setIsCapturing(false);
-    setForceRemount(true); // Принудительно удалить компонент
+    // Stop current stream
+    stopCameraStream();
     
-    // Сбросить ref
-    if (cameraRef.current) {
-      cameraRef.current = null;
+    // Update facing state
+    setFacing(newFacing);
+    
+    // Get new stream with new facing mode
+    if (isCameraActive) {
+      await getCameraStream(newFacing);
     }
-
-    // Увеличиваем задержки для мобильных браузеров (особенно iOS Safari)
-    setTimeout(() => {
-      // Смена facing
-      const newFacing = facing === 'back' ? 'front' : 'back';
-      console.log('Setting new facing:', newFacing);
-      setFacing(newFacing);
-      
-      // Форсировать ремонт с новым key (увеличиваем значительно)
-      setCameraKey(prev => prev + 100); // Очень большой скачок для гарантированного пересоздания
-      setForceRemount(false); // Разрешить создание нового компонента
-
-      // Реактивировать камеру с большой задержкой для мобильных браузеров
-      setTimeout(() => {
-        console.log('Reactivating camera with facing:', newFacing);
-        setIsCameraActive(true);
-      }, 1200); // Увеличено до 1200ms для мобильных браузеров
-    }, 600); // Увеличено до 600ms для полной остановки камеры
   };
 
   const toggleFlash = () => {
@@ -785,16 +914,40 @@ export default function CameraScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.cameraWrapper, centerContent && styles.cameraWrapperDesktop]}>
-        {isCameraActive && !forceRemount ? (
-          <CameraView
-            key={isWeb ? `camera-${facing}-${cameraKey}` : undefined}
-            ref={cameraRef}
-            style={styles.cameraView}
-            facing={facing}
-            mirror={false}
-            videoStabilizationMode="off"
-            flash={flashMode}
-          />
+        {isCameraActive ? (
+          isWeb ? (
+            // Web: Use MediaDevices API with video element
+            <View style={styles.cameraView}>
+              {/* @ts-ignore - React Native Web supports video element */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  transform: facing === 'front' ? 'scaleX(-1)' : 'none',
+                }}
+              />
+              {/* @ts-ignore - React Native Web supports canvas element */}
+              <canvas
+                ref={canvasRef}
+                style={{ display: 'none' }}
+              />
+            </View>
+          ) : (
+            // Native: Use expo-camera CameraView
+            <CameraView
+              ref={cameraRef}
+              style={styles.cameraView}
+              facing={facing}
+              mirror={false}
+              videoStabilizationMode="off"
+              flash={flashMode}
+            />
+          )
         ) : (
           <View style={styles.cameraView}>
             <View style={styles.cameraUnavailableOverlay}>
